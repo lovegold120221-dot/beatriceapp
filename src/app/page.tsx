@@ -387,6 +387,54 @@ export default function App() {
     return output;
   };
 
+  // Fetch recent conversation history from Firebase for long-term memory
+  const fetchConversationMemory = async (): Promise<string> => {
+    if (!user) return '';
+    try {
+      const snapshot = await get(
+        query(
+          dbRef(database, `users/${user.uid}/chats`),
+          orderByChild('created_at')
+        )
+      );
+      if (!snapshot.exists()) return '';
+
+      const recentChats: string[] = [];
+      let count = 0;
+      // Get last 3 chats (most recent)
+      const allChats: { key: string; val: any }[] = [];
+      snapshot.forEach((child) => { allChats.push({ key: child.key!, val: child.val() }); return false; });
+      allChats.reverse();
+
+      for (const chat of allChats) {
+        if (count >= 3) break;
+        const msgSnapshot = await get(
+          query(
+            dbRef(database, `users/${user.uid}/chats/${chat.key}/messages`),
+            orderByChild('created_at')
+          )
+        );
+        if (msgSnapshot.exists()) {
+          const messages: string[] = [];
+          msgSnapshot.forEach((msgChild) => {
+            const m = msgChild.val();
+            messages.push(`${m.role === 'user' ? 'User' : 'Beatrice'}: ${m.text}`);
+          });
+          if (messages.length > 0) {
+            recentChats.push(`[Previous conversation - ${chat.val.title || 'Chat'}]\n${messages.slice(-6).join('\n')}`);
+            count++;
+          }
+        }
+      }
+      return recentChats.length > 0
+        ? `\n\nHere is context from your past conversations with this user (for memory):\n${recentChats.join('\n\n')}`
+        : '';
+    } catch (err) {
+      console.error('Failed to fetch conversation memory', err);
+      return '';
+    }
+  };
+
   const startChatLiveSession = async () => {
     // Live session for text chat — no mic, no overlay, plays audio responses
     try {
@@ -399,6 +447,10 @@ export default function App() {
       // Use default sample rate (typically 44100 or 48000) instead of 24000
       // Browsers don't reliably support 24000 Hz sample rate
       audioContextRef.current = new AudioContext();
+
+      // Fetch long-term memory from past conversations
+      const memoryContext = await fetchConversationMemory();
+      const sessionUserContext = userContext + memoryContext;
 
       const sessionPromise = connectLive(
         () => {
@@ -457,7 +509,7 @@ export default function App() {
           liveSessionRef.current = null;
           setIsLiveActive(false);
         },
-        userContext,
+        sessionUserContext,
         responseStyle
       );
 
@@ -495,6 +547,11 @@ export default function App() {
         (sessionPromise) => {
           console.log("Live session opened");
           setIsLiveActive(true);
+
+          // Beatrice speaks first — send an initial greeting
+          sessionPromise.then((session) => {
+            session.sendClientContent({ turns: "Hey! What's up?", turnComplete: true });
+          });
 
           const source = audioContextRef.current!.createMediaStreamSource(stream);
           const inputAnalyser = audioContextRef.current!.createAnalyser();
@@ -1917,10 +1974,12 @@ export default function App() {
                     <Settings size={18} />
                     <span>Settings</span>
                   </button>
-                  <button onClick={handleSignOut} className="w-full flex items-center space-x-3 p-3 rounded-xl hover:bg-[#212121] text-red-400 transition-colors text-sm">
-                    <PhoneOff size={18} />
-                    <span>Sign Out</span>
-                  </button>
+                  {user && (
+                    <button onClick={handleSignOut} className="w-full flex items-center space-x-3 p-3 rounded-xl hover:bg-[#212121] text-red-400 transition-colors text-sm">
+                      <PhoneOff size={18} />
+                      <span>Sign Out</span>
+                    </button>
+                  )}
                 </div>
               </motion.div>
             </>
