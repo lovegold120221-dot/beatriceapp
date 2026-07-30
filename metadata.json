@@ -1,0 +1,8 @@
+{
+  "name": "Echovoice",
+  "description": "A sophisticated conversational AI interface with voice, image, and thinking capabilities.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
