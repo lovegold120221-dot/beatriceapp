@@ -47,6 +47,8 @@ import {
 import { generateChatResponseStream } from '../services/ollama';
 import { generateImage } from '../services/flux';
 import { tools, executeTool } from "../services/tools";
+import { pairDevice, getDevices, sendTaskToPhone, latestProgressMessage } from '../services/phoneBridge';
+import type { DevicePairing, TaskBrief, TaskRecord } from '../services/taskQueue';
 
 declare global {
   interface Window {
@@ -232,6 +234,18 @@ export default function App() {
   const [voiceName, setVoiceName] = useState('Aoede');
   const [language, setLanguage] = useState('English');
 
+  // ─── Beatrice Voice ↔ Phone bridge state ───────────────────
+  const [pairedDevices, setPairedDevices] = useState<DevicePairing[]>([]);
+  const [pairingCodeInput, setPairingCodeInput] = useState('');
+  const [pairingStatus, setPairingStatus] = useState('');
+  const [pendingProposal, setPendingProposal] = useState<TaskBrief | null>(null);
+  const [proposalConfirming, setProposalConfirming] = useState(false);
+  const [activeTask, setActiveTask] = useState<TaskRecord | null>(null);
+  const [taskStatus, setTaskStatus] = useState('');
+  const pendingToolCallRef = useRef<{ id: string; name: string; session: any } | null>(null);
+  const taskUnsubRef = useRef<(() => void) | null>(null);
+  const lastSpokenMsgRef = useRef('');
+
   useEffect(() => {
     const savedUserContext = localStorage.getItem('eburon_userContext');
     const savedResponseStyle = localStorage.getItem('eburon_responseStyle');
@@ -262,6 +276,11 @@ export default function App() {
       setUser(firebaseUser);
       if (firebaseUser) {
         setView('home');
+        getDevices(firebaseUser.uid)
+          .then(setPairedDevices)
+          .catch(() => setPairedDevices([]));
+      } else {
+        setPairedDevices([]);
       }
     });
     return () => unsubscribe();
@@ -497,8 +516,171 @@ export default function App() {
     }
   };
 
+  // ─── Beatrice Voice ↔ Phone bridge handlers ────────────────
+  // Speak a short announcement using the Gemini TTS model.
+  const speakText = async (text: string) => {
+    try {
+      const audioUrl = await textToSpeech(text);
+      if (audioUrl) {
+        const audio = new Audio(audioUrl);
+        await audio.play();
+      }
+    } catch (err) {
+      console.error('TTS announcement failed:', err);
+    }
+  };
+
+  // Route a tool response back to the live session so the model can
+  // continue the conversation naturally.
+  const sendToolResult = (session: any, id: string | undefined, name: string | undefined, result: any) => {
+    if (!session || !id || !name) return;
+    try {
+      session.sendToolResponse({
+        functionResponses: [{ id, name, response: { result } }],
+      });
+    } catch (err) {
+      console.error('sendToolResponse failed:', err);
+    }
+  };
+
+  // Intercept tool calls from live session messages. Only
+  // `proposePhoneTask` needs UI confirmation; the rest pass through.
+  const handleLiveToolCall = (message: any) => {
+    const functionCalls =
+      message.toolCall?.functionCalls ||
+      message.serverContent?.toolCall?.functionCalls;
+    if (!functionCalls?.length) return;
+
+    for (const fc of functionCalls) {
+      if (fc.name === 'proposePhoneTask') {
+        const args = fc.args || {};
+        pendingToolCallRef.current = {
+          id: fc.id || 'fc',
+          name: fc.name,
+          session: liveSessionRef.current,
+        };
+        setPendingProposal({
+          goal: String(args.goal || ''),
+          steps: Array.isArray(args.steps) ? args.steps.map(String) : [],
+          app: args.app ? String(args.app) : undefined,
+          priority: (['low', 'normal', 'high', 'urgent'].includes(args.priority)
+            ? args.priority
+            : 'normal') as TaskBrief['priority'],
+          context: args.context ? String(args.context) : undefined,
+        });
+      }
+    }
+  };
+
+  const handlePairDevice = async () => {
+    if (!user) return;
+    setPairingStatus('Linking...');
+    try {
+      const device = await pairDevice(pairingCodeInput, user.uid);
+      if (device) {
+        setPairingStatus(`Linked ${device.name}. You can now send tasks to this phone.`);
+        setPairingCodeInput('');
+        setPairedDevices(await getDevices(user.uid));
+        speakText('Your phone is linked. I can send tasks to it now.');
+      } else {
+        setPairingStatus('No device found with that code. Check the code shown on your phone.');
+      }
+    } catch (err: any) {
+      setPairingStatus(err?.message || 'Failed to link device.');
+    }
+  };
+
+  const handleProposalConfirm = async () => {
+    if (!pendingProposal || !user) return;
+    const toolCall = pendingToolCallRef.current;
+    setProposalConfirming(true);
+    try {
+      const device = pairedDevices[0];
+      if (!device) {
+        setTaskStatus('No linked phone found. Link one in Settings first.');
+        sendToolResult(toolCall?.session, toolCall?.id, toolCall?.name, {
+          status: 'error',
+          message: 'No linked phone found. The user needs to pair a device first.',
+        });
+        pendingToolCallRef.current = null;
+        setPendingProposal(null);
+        setProposalConfirming(false);
+        return;
+      }
+
+      setTaskStatus(`Sending task to ${device.name}...`);
+      speakText(`Okay, sending that to your phone now.`);
+
+      taskUnsubRef.current?.();
+      lastSpokenMsgRef.current = '';
+
+      const handle = await sendTaskToPhone(
+        pendingProposal,
+        user.uid,
+        device.deviceId,
+        (task) => {
+          setActiveTask(task);
+          if (!task) return;
+          const msg = latestProgressMessage(task);
+          if (msg && msg !== lastSpokenMsgRef.current) {
+            lastSpokenMsgRef.current = msg;
+            speakText(msg);
+          }
+          if (task.state === 'done') {
+            const summary = task.result?.summary || msg || 'The task is done.';
+            if (summary !== lastSpokenMsgRef.current) {
+              lastSpokenMsgRef.current = summary;
+              speakText(`Done. ${summary}`);
+            }
+            setTaskStatus('Task completed on your phone.');
+          } else if (task.state === 'failed') {
+            setTaskStatus('Task failed on your phone.');
+          } else if (task.state === 'cancelled') {
+            setTaskStatus('Task was cancelled.');
+          }
+        },
+      );
+
+      if (handle) {
+        taskUnsubRef.current = handle.unsubscribe;
+        setTaskStatus('Task sent to phone.');
+        sendToolResult(toolCall?.session, toolCall?.id, toolCall?.name, {
+          status: 'sent',
+          taskId: handle.taskId,
+          message: `Task sent to ${device.name} for execution.`,
+        });
+      } else {
+        setTaskStatus('Could not send task. Try again.');
+        sendToolResult(toolCall?.session, toolCall?.id, toolCall?.name, {
+          status: 'error',
+          message: 'Failed to create the task.',
+        });
+      }
+    } catch (err: any) {
+      console.error('Proposal confirm failed:', err);
+      setTaskStatus(err?.message || 'Failed to send task.');
+      sendToolResult(toolCall?.session, toolCall?.id, toolCall?.name, {
+        status: 'error',
+        message: err?.message || 'Failed to send task.',
+      });
+    }
+    pendingToolCallRef.current = null;
+    setPendingProposal(null);
+    setProposalConfirming(false);
+  };
+
+  const handleProposalCancel = () => {
+    const toolCall = pendingToolCallRef.current;
+    sendToolResult(toolCall?.session, toolCall?.id, toolCall?.name, {
+      status: 'cancelled',
+      message: 'Task proposal declined by user.',
+    });
+    pendingToolCallRef.current = null;
+    setPendingProposal(null);
+    setProposalConfirming(false);
+  };
+
   const startChatLiveSession = async () => {
-    // Live session for text chat — no mic, no overlay, plays audio responses
     try {
       if (window.aistudio) {
         const hasKey = await window.aistudio.hasSelectedApiKey();
@@ -564,6 +746,10 @@ export default function App() {
             isPlayingRef.current = false;
             setIsSpeaking(false);
           }
+
+          // Handle tool calls (e.g. proposePhoneTask →
+          // user confirmation modal, then send to their phone).
+          handleLiveToolCall(message);
         },
         (err) => console.error("Chat live error:", err),
         () => {
@@ -772,6 +958,10 @@ export default function App() {
             setIsSpeaking(false);
             nextPlayTime = 0;
           }
+
+          // Handle tool calls (e.g. proposePhoneTask →
+          // user confirmation modal, then send to their phone).
+          handleLiveToolCall(message);
         },
         (err) => console.error("Live error:", err),
         () => {
@@ -2250,6 +2440,47 @@ export default function App() {
                         placeholder="e.g., Keep responses concise and use code examples..."
                       />
 
+                      {/* Phone pairing — Beatrice Voice task queue */}
+                      <p className="text-sm text-white mt-4 mb-2">Phones (send tasks)</p>
+                      {pairedDevices.length === 0 ? (
+                        <p className="text-xs text-neutral-500 mb-2">
+                          No phone linked yet. Open the Beatrice OS app on your Android
+                          phone to get a pairing code.
+                        </p>
+                      ) : (
+                        <div className="space-y-2 mb-2">
+                          {pairedDevices.map((d) => (
+                            <div key={d.deviceId} className="flex items-center justify-between bg-[#212121] border border-neutral-800 rounded-xl p-3">
+                              <div className="min-w-0">
+                                <p className="text-sm text-white truncate">{d.name}</p>
+                                <p className="text-xs text-neutral-500 truncate">{d.deviceId}</p>
+                              </div>
+                              <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-full shrink-0 ml-2">
+                                Linked
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex space-x-2">
+                        <input
+                          value={pairingCodeInput}
+                          onChange={(e) => setPairingCodeInput(e.target.value.toUpperCase())}
+                          placeholder="Enter pairing code"
+                          className="flex-1 bg-[#212121] border border-neutral-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-neutral-600 uppercase tracking-widest"
+                        />
+                        <button
+                          onClick={handlePairDevice}
+                          disabled={!user || pairingCodeInput.trim().length < 4}
+                          className="px-4 py-3 bg-white text-black rounded-xl text-sm font-medium hover:bg-neutral-200 disabled:opacity-40 transition-colors"
+                        >
+                          Link
+                        </button>
+                      </div>
+                      {pairingStatus && (
+                        <p className="text-xs mt-2 text-neutral-400">{pairingStatus}</p>
+                      )}
+
                       {/* Voice selection */}
                       <p className="text-sm text-white mt-4 mb-2">Voice</p>
                       <select
@@ -2523,6 +2754,62 @@ export default function App() {
                 </div>
               </motion.div>
             </>
+          )}
+        </AnimatePresence>
+
+        {/* ─── Task proposal confirmation modal ──────────────── */}
+        <AnimatePresence>
+          {pendingProposal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[80] bg-black/70 flex items-center justify-center p-6"
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-[#1a1a1a] border border-neutral-800 rounded-2xl p-6 w-full max-w-md"
+              >
+                <h3 className="text-white font-semibold mb-1">Send this task to your phone?</h3>
+                <p className="text-sm text-neutral-300 mb-4">{pendingProposal.goal}</p>
+                {pendingProposal.steps.length > 0 && (
+                  <ol className="text-xs text-neutral-400 space-y-1 mb-4 list-decimal list-inside">
+                    {pendingProposal.steps.map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ol>
+                )}
+                {pendingProposal.app && (
+                  <p className="text-xs text-neutral-500 mb-4">App: {pendingProposal.app}</p>
+                )}
+                <div className="flex space-x-3">
+                  <button
+                    onClick={handleProposalCancel}
+                    disabled={proposalConfirming}
+                    className="flex-1 py-3 bg-[#212121] text-neutral-300 rounded-xl text-sm font-medium hover:bg-[#2a2a2a] disabled:opacity-40 transition-colors"
+                  >
+                    Not now
+                  </button>
+                  <button
+                    onClick={handleProposalConfirm}
+                    disabled={proposalConfirming || pairedDevices.length === 0}
+                    className="flex-1 py-3 bg-white text-black rounded-xl text-sm font-medium hover:bg-neutral-200 disabled:opacity-40 transition-colors"
+                  >
+                    {proposalConfirming ? 'Sending...' : 'Send to phone'}
+                  </button>
+                </div>
+                {pairedDevices.length === 0 && !proposalConfirming && (
+                  <p className="text-xs text-amber-400/80 mt-3">
+                    No linked phone. Link one in Settings (gear icon) first.
+                  </p>
+                )}
+                {taskStatus && !proposalConfirming && (
+                  <p className="text-xs text-neutral-400 mt-3">{taskStatus}</p>
+                )}
+              </motion.div>
+            </motion.div>
           )}
         </AnimatePresence>
 
