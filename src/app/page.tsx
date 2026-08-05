@@ -152,6 +152,7 @@ export default function App() {
   const [isLiveActive, setIsLiveActive] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [liveTranscription, setLiveTranscription] = useState('');
+  const [micError, setMicError] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<{ url: string, type: string } | null>(null);
   const [showImageSettings, setShowImageSettings] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -521,36 +522,78 @@ export default function App() {
 
   const startLiveSession = async () => {
     try {
+      setMicError(null);
+
+      // Check if we're in a secure context (required for getUserMedia).
+      if (typeof window !== 'undefined' && !window.isSecureContext) {
+        throw new Error('Microphone requires HTTPS. This page must be served over a secure connection.');
+      }
+
+      // Check if getUserMedia is available.
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('Your browser does not support microphone access. Try Chrome, Edge, or Safari.');
+      }
+
       if (window.aistudio) {
         const hasKey = await window.aistudio.hasSelectedApiKey();
         if (!hasKey) {
           await window.aistudio.openSelectKey();
         }
       }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        }
-      });
-      // Use default sample rate (typically 44100 or 48000) instead of 24000
-      // Browsers don't reliably support 24000 Hz sample rate
-      audioContextRef.current = new AudioContext();
 
-      // Simple energy-based VAD — only send audio when speech is detected
+      // Request microphone access with a clear error if denied.
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          }
+        });
+      } catch (micErr: any) {
+        if (micErr?.name === 'NotAllowedError' || micErr?.name === 'PermissionDeniedError') {
+          setMicError('Microphone access was denied. Click the camera icon in your browser address bar to allow it, then try again.');
+        } else if (micErr?.name === 'NotFoundError' || micErr?.name === 'DevicesNotFoundError') {
+          setMicError('No microphone found. Connect a microphone and try again.');
+        } else if (micErr?.name === 'NotReadableError' || micErr?.name === 'TrackStartError') {
+          setMicError('Your microphone is being used by another app. Close it and try again.');
+        } else {
+          setMicError(`Could not access microphone: ${micErr?.message || 'Unknown error'}`);
+        }
+        setIsVoiceOpen(false);
+        return;
+      }
+
+      // Create and resume AudioContext (browsers start it suspended).
+      audioContextRef.current = new AudioContext();
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+
+      // Energy-based VAD — tuned for low-latency real-time conversation.
+      // Lower hangover = faster turn detection (less waiting after user stops).
       let vadSilenceFrames = 0;
-      const VAD_THRESHOLD = 0.008;
-      const VAD_HANGOVER = 15;
+      const VAD_THRESHOLD = 0.006;
+      const VAD_HANGOVER = 6; // ~250ms — fast enough for natural turn-taking
 
       const sessionPromise = connectLive(
         (sessionPromise) => {
           console.log("Live session opened");
           setIsLiveActive(true);
 
-          // Beatrice speaks first — send an initial greeting
+          // Beatrice speaks first — a natural, casual greeting like a friend
+          // picking up a phone, not an assistant greeting a user.
+          const greetings = [
+            "Hey... what's up?",
+            "Oh hey! What's going on?",
+            "Heyy, sige — what's on your mind?",
+            "Oh, hi! I'm here. What's up?",
+            "Hey — talk to me.",
+          ];
+          const greeting = greetings[Math.floor(Math.random() * greetings.length)];
           sessionPromise.then((session) => {
-            session.sendClientContent({ turns: "Hey! What's up?", turnComplete: true });
+            session.sendClientContent({ turns: greeting, turnComplete: true });
           });
 
           const source = audioContextRef.current!.createMediaStreamSource(stream);
@@ -664,6 +707,7 @@ export default function App() {
             audioQueueRef.current = [];
             isPlayingRef.current = false;
             setIsSpeaking(false);
+            nextPlayTime = 0;
           }
         },
         (err) => console.error("Live error:", err),
@@ -677,16 +721,33 @@ export default function App() {
 
       liveSessionRef.current = await sessionPromise;
 
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to start live session:", err);
+      const errMsg = err?.message || 'Could not connect to Beatrice. Please try again.';
+      setMicError(errMsg);
       setIsVoiceOpen(false);
+      // Clean up any partial state.
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
     }
   };
+
+  // Low-latency audio playback — schedules chunks back-to-back without gaps.
+  // Uses a shared timeline so consecutive chunks play seamlessly.
+  let nextPlayTime = 0;
 
   const playNextInQueue = () => {
     if (audioQueueRef.current.length === 0 || !audioContextRef.current) {
       isPlayingRef.current = false;
       setIsSpeaking(false);
+      // Reset the timeline when queue empties.
+      nextPlayTime = 0;
       return;
     }
 
@@ -698,7 +759,6 @@ export default function App() {
       float32Data[i] = pcmData[i] / 0x7FFF;
     }
 
-    // Resample from 24kHz (Gemini's output rate) to the AudioContext's actual sample rate
     const targetSampleRate = audioContextRef.current.sampleRate;
     const resampledData = resampleAudio(float32Data, 24000, targetSampleRate);
 
@@ -711,11 +771,21 @@ export default function App() {
     source.connect(outputAnalyser);
     outputAnalyser.connect(audioContextRef.current.destination);
     outputAnalyserRef.current = outputAnalyser;
+
+    // Schedule back-to-back: if this is the first chunk or queue was empty,
+    // start now. Otherwise, append to the previous chunk's end time.
+    const now = audioContextRef.current.currentTime;
+    if (nextPlayTime < now) {
+      nextPlayTime = now;
+    }
+    source.start(nextPlayTime);
+    nextPlayTime += buffer.duration;
+
     source.onended = () => {
       outputAnalyserRef.current = null;
+      // Immediately schedule the next chunk (no setTimeout gap).
       playNextInQueue();
     };
-    source.start();
   };
 
   // Natural interruption handling - when user speaks while agent is speaking
@@ -726,26 +796,30 @@ export default function App() {
     audioQueueRef.current = [];
     isPlayingRef.current = false;
     setIsSpeaking(false);
+    nextPlayTime = 0;
     
-    // 2. Send acknowledgment through live session if available
+    // 2. Send a brief, natural backchannel — the kind a real person makes
+    // when someone interrupts them on a phone call. Don't send a full sentence.
     if (liveSessionRef.current) {
-      // Brief, natural human-like acknowledgments
-      const acknowledgments = [
-        "Yup, go on.",
-        "Ah huh, I'm listening.",
-        "What is it?",
-        "Yes?",
-        "Go on.",
-        "Mm-hmm.",
-        "Right, continue.",
-        "I'm here."
+      const backchannels = [
+        "mm-hmm",
+        "yeah",
+        "ah huh",
+        "right",
+        "go on",
+        "diba",
+        "uh-huh",
+        "hmm",
+        "sge",
+        "oh?",
+        "wait—",
+        "yeah, yeah",
       ];
-      const acknowledgment = acknowledgments[Math.floor(Math.random() * acknowledgments.length)];
+      const backchannel = backchannels[Math.floor(Math.random() * backchannels.length)];
       
-      // Send as text input to the live session
       liveSessionRef.current.sendClientContent({
-        turns: [{ role: 'user', parts: [{ text: acknowledgment }] }],
-        turnComplete: true
+        turns: [{ role: 'user', parts: [{ text: backchannel }] }],
+        turnComplete: false  // Don't complete the turn — let the user keep talking
       });
     }
   };
