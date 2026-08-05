@@ -30,27 +30,40 @@ export const calendarTool: FunctionDeclaration = {
   },
 };
 
-export const taskerTool: FunctionDeclaration = {
-  name: "executeTask",
-  description: "Delegate a task to the tasker agent. Use this when the user asks you to perform an action, create something, run code, automate a workflow, or execute any task that requires multi-step execution. The tasker agent will handle the task asynchronously and report back.",
+export const proposePhoneTaskTool: FunctionDeclaration = {
+  name: "proposePhoneTask",
+  description: "Propose a phone automation task for the user to confirm. Beatrice creates a detailed task proposal with steps, and the user must confirm before it's sent to their paired Android phone for execution. Use this when the user asks to do something on their phone — open apps, play media, send messages, set alarms, search, navigate, toggle settings, etc.",
   parameters: {
     type: Type.OBJECT,
     properties: {
-      task: {
+      goal: {
         type: Type.STRING,
-        description: "The task description or prompt to send to the tasker agent. Be specific and detailed about what needs to be done.",
+        description: "A clear, specific description of what the task should accomplish on the phone.",
+      },
+      steps: {
+        type: Type.ARRAY,
+        items: { type: Type.STRING },
+        description: "The planned sequence of actions the phone agent should take (e.g. ['Open YouTube', 'Tap search', 'Type the video name', 'Press search', 'Tap first result']).",
+      },
+      app: {
+        type: Type.STRING,
+        description: "The primary app the task will use (e.g. 'YouTube', 'WhatsApp', 'Settings').",
       },
       priority: {
         type: Type.STRING,
         enum: ["low", "normal", "high", "urgent"],
         description: "The priority level of the task.",
       },
+      context: {
+        type: Type.STRING,
+        description: "Additional context that helps the phone agent (e.g. a search query, a contact name, a specific URL).",
+      },
     },
-    required: ["task"],
+    required: ["goal", "steps"],
   },
 };
 
-export const tools = [calculatorTool, calendarTool, taskerTool];
+export const tools = [calculatorTool, calendarTool, proposePhoneTaskTool];
 
 export async function executeTool(name: string, args: any) {
   if (name === "calculate") {
@@ -64,16 +77,18 @@ export async function executeTool(name: string, args: any) {
     }
   }
   if (name === "getCalendarEvents") {
-    // Mock implementation
     return { events: [{ title: "Meeting", time: "10:00 AM" }, { title: "Lunch", time: "1:00 PM" }] };
   }
-  if (name === "executeTask") {
-    // This will be handled by the tasker agent integration
-    // Return a confirmation that the task has been queued
-    return { 
-      status: "queued", 
-      message: `Task delegated to tasker agent: ${args.task}`,
-      priority: args.priority || "normal"
+  if (name === "proposePhoneTask") {
+    // Return the proposal — the UI layer handles user confirmation + Firebase push.
+    return {
+      status: "proposed",
+      goal: args.goal,
+      steps: args.steps,
+      app: args.app || null,
+      priority: args.priority || "normal",
+      context: args.context || null,
+      message: `Task proposal created: "${args.goal}". Awaiting user confirmation.`,
     };
   }
   return { error: "Unknown tool" };
