@@ -52,6 +52,11 @@ __pycache__/
 training_tasks.md
 enrich_dataset_prompt.md
 google-services.json
+google-services *.json
+GoogleService-Info*.plist
+
+# YOLO PyTorch model weights (keep the ONNX in assets, not the .pt files)
+*.pt
 
 # Local credentials bundled only into developer test builds
 /assets/local_config/ai_test_config.json

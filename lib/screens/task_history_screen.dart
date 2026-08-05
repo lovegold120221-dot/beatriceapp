@@ -72,13 +72,13 @@ class _TaskHistoryScreenState extends State<TaskHistoryScreen> {
   IconData _getStatusIcon(String status) {
     switch (status) {
       case 'Success':
-        return Icons.check_circle;
+        return Icons.check_circle_rounded;
       case 'Failed':
-        return Icons.cancel;
+        return Icons.cancel_rounded;
       case 'Cancelled':
-        return Icons.stop_circle;
+        return Icons.stop_circle_rounded;
       default:
-        return Icons.info;
+        return Icons.info_outline_rounded;
     }
   }
 
@@ -89,7 +89,7 @@ class _TaskHistoryScreenState extends State<TaskHistoryScreen> {
         title: Text('Task History (${_history.length})'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.delete),
+            icon: const Icon(Icons.delete_outline_rounded),
             onPressed: _history.isEmpty ? null : _clearHistory,
           ),
         ],

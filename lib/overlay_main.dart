@@ -60,7 +60,7 @@ class _OverlayAppState extends State<OverlayApp> {
       ChatMessage(
         role: 'assistant',
         content:
-            'Hi! I am your Private Agent. Ask me to perform any task on your screen.',
+            'Hi! I am your Beatrice OS assistant. Ask me to perform any task on your screen.',
       ),
     );
   }
@@ -123,8 +123,8 @@ class _OverlayAppState extends State<OverlayApp> {
   Future<void> _initializeServices() async {
     // 1. Send registration broadcast first so native MethodChannels are active
     final intent = const AndroidIntent(
-      action: 'com.orailnoor.privateagent.REGISTER_BACKGROUND_CHANNELS',
-      package: 'com.orailnoor.privateagent',
+      action: 'ai.eburon.beatrice.REGISTER_BACKGROUND_CHANNELS',
+      package: 'ai.eburon.beatrice',
     );
     try {
       await intent.sendBroadcast();
@@ -334,8 +334,8 @@ class _OverlayAppState extends State<OverlayApp> {
     const intent = AndroidIntent(
       action: 'android.intent.action.MAIN',
       category: 'android.intent.category.LAUNCHER',
-      package: 'com.orailnoor.privateagent',
-      componentName: 'com.orailnoor.privateagent.MainActivity',
+      package: 'ai.eburon.beatrice',
+      componentName: 'ai.eburon.beatrice.MainActivity',
       flags: <int>[
         Flag.FLAG_ACTIVITY_NEW_TASK,
         Flag.FLAG_ACTIVITY_REORDER_TO_FRONT,
@@ -426,7 +426,7 @@ class _OverlayAppState extends State<OverlayApp> {
                       ),
                       const SizedBox(width: 8),
                       const Text(
-                        'Private Agent',
+                        'Beatrice OS',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -439,7 +439,7 @@ class _OverlayAppState extends State<OverlayApp> {
                     children: [
                       Semantics(
                         button: true,
-                        label: 'Open PrivateAgent',
+                        label: 'Open Beatrice OS',
                         child: GestureDetector(
                           onTap: () => unawaited(_openMainApp()),
                           child: const Padding(
@@ -546,7 +546,7 @@ class _OverlayAppState extends State<OverlayApp> {
                             GestureDetector(
                               onTap: _toggleListening,
                               child: Icon(
-                                _isListening ? Icons.mic : Icons.mic_none,
+                                _isListening ? Icons.graphic_eq_rounded : Icons.mic_none_rounded,
                                 color: _isListening
                                     ? Colors.red
                                     : Theme.of(context).colorScheme.primary,
@@ -580,7 +580,7 @@ class _OverlayAppState extends State<OverlayApp> {
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(
-                              Icons.send_rounded,
+                              Icons.arrow_upward_rounded,
                               color: Colors.white,
                               size: 14,
                             ),

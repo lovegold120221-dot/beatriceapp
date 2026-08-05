@@ -18,33 +18,44 @@ dependencies:
   flutter_tts: ^4.2.0
 
   # App management
-  installed_apps: ^1.5.0
+  installed_apps: ^2.1.1
   url_launcher: ^6.3.0
-  android_intent_plus: ^5.1.0
+  android_intent_plus: ^6.1.0
 
   # Contacts
-  flutter_contacts: ^1.1.9+2
+  flutter_contacts: ^2.3.1
 
   # Permissions
-  permission_handler: ^11.4.0
+  permission_handler: ^13.0.0
 
   # Storage
   shared_preferences: ^2.3.0
   path_provider: ^2.1.0
 
   # Notifications
-  flutter_local_notifications: ^18.0.0
+  flutter_local_notifications: ^22.2.0
 
   # System control
-  volume_controller: ^2.0.8
-  screen_brightness: ^1.0.1
+  volume_controller: ^3.6.0
+  screen_brightness: ^2.1.11
 
   # Shizuku (optional)
   shizuku_api: ^1.2.2
-  share_plus: ^13.2.0
+  share_plus: ^13.3.0
   intl: ^0.20.3
   flutter_overlay_window: ^0.5.0
   flutter_markdown: ^0.7.7+1
+
+  # On-device vision — YOLO26 object detection via ONNX Runtime
+  onnxruntime: ^1.4.1
+  image: ^4.5.0
+
+  # Beatrice Voice — WebView embedding beatrice.eburon.ai
+  webview_flutter: ^4.10.0
+
+  # Firebase RTDB task queue
+  firebase_core: ^3.8.0
+  firebase_database: ^11.2.0
 
 dependency_overrides:
   flutter_overlay_window:
@@ -54,7 +65,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-  flutter_launcher_icons: ^0.13.1
+  flutter_launcher_icons: ^0.14.4
 
 flutter_launcher_icons:
   android: true

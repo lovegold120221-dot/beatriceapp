@@ -7,7 +7,6 @@ import '../services/shizuku_service.dart';
 import '../services/screen_automation_service.dart';
 import '../services/telegram_service.dart';
 import 'task_history_screen.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import '../config/feature_flags.dart';
 
@@ -35,7 +34,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   late TextEditingController _baseUrlController;
   late TextEditingController _modelController;
   late TextEditingController _telegramTokenController;
-  bool _obscureKey = true;
   bool _telegramEnabled = false;
   double _maxSteps = 15;
   bool _disableMaxSteps = false;
@@ -165,79 +163,6 @@ class _SettingsScreenState extends State<SettingsScreen>
       useScreenCompression: _useScreenCompression,
       useSystemPrompt: _useSystemPrompt,
     );
-  }
-
-  Future<void> _fetchModels() async {
-    final baseUrl = _baseUrlController.text.trim();
-    final apiKey = _apiKeyController.text.trim();
-
-    if (baseUrl.isEmpty || apiKey.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter Base URL and API Key first.'),
-        ),
-      );
-      return;
-    }
-
-    // Show loading
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
-
-    final models = await widget.aiService.fetchAvailableModels(baseUrl, apiKey);
-
-    // Hide loading
-    if (mounted) Navigator.pop(context);
-
-    if (models.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No models found or error fetching models.'),
-          ),
-        );
-      }
-      return;
-    }
-
-    if (mounted) {
-      final isNvidia = AiService.isNvidiaBaseUrl(baseUrl);
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(
-            isNvidia ? 'Select a Free NVIDIA Model' : 'Select a Model',
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: 300,
-            child: ListView.builder(
-              itemCount: models.length,
-              itemBuilder: (context, index) {
-                return ListTile(
-                  title: Text(models[index]),
-                  onTap: () {
-                    setState(() {
-                      _modelController.text = models[index];
-                    });
-                    Navigator.pop(context);
-                  },
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-          ],
-        ),
-      );
-    }
   }
 
   Widget _buildSettingsCard({
@@ -445,148 +370,15 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
 
           // 2. AI Engine Config Card
-          _buildSettingsCard(
-            icon: Icons.psychology_outlined,
-            title: 'AI Engine Configuration',
-            subtitle: 'Supports any OpenAI-compatible API endpoint',
-            isDark: isDark,
-            children: [
-              TextField(
-                controller: _apiKeyController,
-                decoration: _buildInputDecoration(
-                  labelText: 'API Key',
-                  hintText: 'sk-...',
-                  prefixIcon: const Icon(Icons.key_rounded, size: 18),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscureKey ? Icons.visibility_off : Icons.visibility,
-                      size: 18,
-                    ),
-                    onPressed: () => setState(() => _obscureKey = !_obscureKey),
-                  ),
-                ),
-                obscureText: _obscureKey,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _baseUrlController,
-                decoration: _buildInputDecoration(
-                  labelText: 'API Base URL',
-                  hintText: 'https://api.deepseek.com',
-                  prefixIcon: const Icon(Icons.dns_rounded, size: 18),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  ActionChip(
-                    label: const Text(
-                      'Local Server',
-                      style: TextStyle(fontSize: 11),
-                    ),
-                    tooltip: 'For local Llama.cpp or LM Studio',
-                    onPressed: () =>
-                        _baseUrlController.text = 'http://192.168.1.X:8080/v1',
-                  ),
-                  ActionChip(
-                    label: const Text(
-                      'Ollama Cloud',
-                      style: TextStyle(fontSize: 11),
-                    ),
-                    onPressed: () {
-                      _baseUrlController.text = 'https://ollama.com/v1';
-                      _modelController.text = 'gemma3:4b';
-                    },
-                  ),
-                  ActionChip(
-                    label: const Text(
-                      'DeepSeek',
-                      style: TextStyle(fontSize: 11),
-                    ),
-                    onPressed: () =>
-                        _baseUrlController.text = 'https://api.deepseek.com',
-                  ),
-                  ActionChip(
-                    label: const Text('Groq', style: TextStyle(fontSize: 11)),
-                    onPressed: () => _baseUrlController.text =
-                        'https://api.groq.com/openai/v1',
-                  ),
-                  ActionChip(
-                    avatar: const Icon(Icons.memory_rounded, size: 16),
-                    label: const Text('NVIDIA', style: TextStyle(fontSize: 11)),
-                    tooltip: 'NVIDIA NIM free endpoints',
-                    onPressed: () {
-                      _baseUrlController.text = AiService.nvidiaBaseUrl;
-                      _modelController.text = AiService.nvidiaDefaultModel;
-                    },
-                  ),
-                  ActionChip(
-                    label: const Text('Custom', style: TextStyle(fontSize: 11)),
-                    tooltip: 'Clear fields',
-                    onPressed: () {
-                      _baseUrlController.clear();
-                      _apiKeyController.clear();
-                      _modelController.clear();
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _modelController,
-                      decoration: _buildInputDecoration(
-                        labelText: 'Model',
-                        hintText: 'deepseek-chat',
-                        prefixIcon: const Icon(
-                          Icons.smart_toy_rounded,
-                          size: 18,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    onPressed: _fetchModels,
-                    icon: const Icon(
-                      Icons.cloud_download,
-                      size: 18,
-                      color: Colors.white,
-                    ),
-                    label: const Text(
-                      'Fetch',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+          // LLM integration cards (AI Engine Configuration) intentionally hidden
+          // — Gemini is pre-configured and the key is loaded from a bundled
+          // local config at runtime. Max steps remains adjustable.
 
-          // 3. Parameters & Tuning Card
+          // 3. Max Steps Card
           _buildSettingsCard(
-            icon: Icons.tune_outlined,
-            title: 'Tuning & Boundaries',
-            subtitle: 'Configure LLM agent parameters',
+            icon: Icons.tune_rounded,
+            title: 'Task Limits',
+            subtitle: 'Control how many steps the agent takes per task',
             isDark: isDark,
             children: [
               SwitchListTile(
@@ -629,45 +421,12 @@ class _SettingsScreenState extends State<SettingsScreen>
                   },
                 ),
               ],
-              const SizedBox(height: 12),
-              TextField(
-                controller: _maxTokensController,
-                keyboardType: TextInputType.number,
-                decoration: _buildInputDecoration(
-                  labelText: 'Context Limit (Max Tokens)',
-                  hintText: '1024',
-                  prefixIcon: const Icon(Icons.token_rounded, size: 18),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Temperature: ${_temperature.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 13,
-                ),
-              ),
-              Slider(
-                value: _temperature,
-                min: 0.0,
-                max: 2.0,
-                divisions: 20,
-                label: _temperature.toStringAsFixed(2),
-                onChanged: (value) {
-                  setState(() {
-                    _temperature = value;
-                  });
-                },
-                onChangeEnd: (value) {
-                  _autoSave();
-                },
-              ),
             ],
           ),
 
           // 4. Behavior & Extensions Card
           _buildSettingsCard(
-            icon: Icons.extension_outlined,
+            icon: Icons.extension_rounded,
             title: 'Behavior & Extensions',
             subtitle: 'Additional feature flags and overlay options',
             isDark: isDark,
@@ -726,7 +485,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       if (await FlutterOverlayWindow.isActive() == false) {
                         await FlutterOverlayWindow.showOverlay(
                           enableDrag: true,
-                          overlayTitle: "PrivateAgent",
+                          overlayTitle: "Beatrice OS",
                           overlayContent: "Floating Assistant",
                           flag: OverlayFlag.focusPointer,
                           alignment: OverlayAlignment.centerRight,
@@ -752,7 +511,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
           // 5. Telegram Remote Access Card
           _buildSettingsCard(
-            icon: Icons.send_and_archive_outlined,
+            icon: Icons.send_and_archive_rounded,
             title: 'Telegram Remote Access',
             subtitle: 'Control your agent remotely from anywhere',
             isDark: isDark,
@@ -780,7 +539,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
           // 6. Accessibility Screen Control Card
           _buildSettingsCard(
-            icon: Icons.visibility_outlined,
+            icon: Icons.visibility_rounded,
             title: 'Screen Control (Accessibility)',
             subtitle: 'Required to read screen and perform automated clicks',
             isDark: isDark,
@@ -789,7 +548,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
           // 7. System Permissions Card
           _buildSettingsCard(
-            icon: Icons.security_outlined,
+            icon: Icons.shield_outlined,
             title: 'App Permissions',
             subtitle: 'Required for automation, microphone, and contacts',
             isDark: isDark,
@@ -798,7 +557,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
           // 8. Task History Card
           _buildSettingsCard(
-            icon: Icons.history_outlined,
+            icon: Icons.manage_history_rounded,
             title: 'Execution logs',
             subtitle: 'View history of tasks and token analytics',
             isDark: isDark,
@@ -822,58 +581,8 @@ class _SettingsScreenState extends State<SettingsScreen>
             ],
           ),
 
-          // 9. About / Links Card
-          _buildSettingsCard(
-            icon: Icons.info_outline_rounded,
-            title: 'About PrivateAgent',
-            subtitle: 'Resources and repository access',
-            isDark: isDark,
-            children: [
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Project Repository'),
-                subtitle: const Text('View source code on GitHub'),
-                leading: const Icon(Icons.code_rounded),
-                onTap: () {
-                  launchUrl(
-                    Uri.parse('https://github.com/orailnoor/private-agent'),
-                    mode: LaunchMode.externalApplication,
-                  );
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Orailnoor on YouTube'),
-                subtitle: const Text('Subscribe for tutorials and updates'),
-                leading: const Icon(
-                  Icons.play_circle_fill_rounded,
-                  color: Colors.red,
-                ),
-                onTap: () {
-                  launchUrl(
-                    Uri.parse('https://www.youtube.com/orailnoor'),
-                    mode: LaunchMode.externalApplication,
-                  );
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Tech Jarves on YouTube'),
-                subtitle: const Text('Subscribe for tutorials and updates'),
-                leading: const Icon(
-                  Icons.play_circle_fill_rounded,
-                  color: Colors.red,
-                ),
-                onTap: () {
-                  launchUrl(
-                    Uri.parse('https://www.youtube.com/techjarves'),
-                    mode: LaunchMode.externalApplication,
-                  );
-                },
-              ),
-            ],
-          ),
-        ],
+          // About / Links card intentionally hidden.
+         ],
       ),
     );
   }
@@ -888,11 +597,11 @@ class _SettingsScreenState extends State<SettingsScreen>
     };
 
     final icons = {
-      'Microphone': Icons.mic,
-      'Contacts': Icons.contacts,
-      'Phone': Icons.phone,
-      'SMS': Icons.sms,
-      'Notifications': Icons.notifications,
+      'Microphone': Icons.mic_rounded,
+      'Contacts': Icons.contacts_rounded,
+      'Phone': Icons.phone_rounded,
+      'SMS': Icons.sms_rounded,
+      'Notifications': Icons.notifications_rounded,
     };
 
     final list = permissionMap.entries.map((entry) {
@@ -964,79 +673,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     return list;
   }
 
-  Widget _buildShizukuCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  widget.shizukuService.isAvailable
-                      ? Icons.link
-                      : Icons.link_off,
-                  color: widget.shizukuService.isAvailable
-                      ? Colors.green
-                      : Colors.grey,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  widget.shizukuService.isAvailable
-                      ? 'Shizuku is running'
-                      : 'Shizuku not detected',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: widget.shizukuService.isAvailable
-                        ? Colors.green
-                        : Colors.grey,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (!widget.shizukuService.isAvailable) ...[
-              const Text(
-                '1. Install Shizuku from Play Store\n'
-                '2. Open Shizuku and start it via Wireless Debugging\n'
-                '3. Come back here and tap "Check Again"',
-                style: TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: () async {
-                  await widget.shizukuService.checkAvailability();
-                  if (mounted) setState(() {});
-                },
-                child: const Text('Check Again'),
-              ),
-            ] else if (!widget.shizukuService.hasPermission) ...[
-              OutlinedButton(
-                onPressed: () async {
-                  await widget.shizukuService.requestPermission();
-                  if (mounted) setState(() {});
-                },
-                child: const Text('Grant Shizuku Permission'),
-              ),
-            ] else ...[
-              Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Colors.green, size: 16),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Permission granted — ADB commands available',
-                    style: TextStyle(color: Colors.green[700], fontSize: 13),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildAccessibilityCard() {
     return FutureBuilder<bool>(
       future: widget.screenAutomationService.isServiceRunning(),
@@ -1052,7 +688,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 Row(
                   children: [
                     Icon(
-                      isRunning ? Icons.visibility : Icons.visibility_off,
+                      isRunning ? Icons.visibility_rounded : Icons.visibility_off_rounded,
                       color: isRunning ? Colors.green : Colors.grey,
                     ),
                     const SizedBox(width: 8),
@@ -1070,7 +706,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 const SizedBox(height: 12),
                 if (!isRunning) ...[
                   const Text(
-                    'Tap below to open Accessibility Settings, then find "PrivateAgent Screen Control" and enable it.',
+                    'Tap below to open Accessibility Settings, then find "Beatrice OS Screen Control" and enable it.',
                     style: TextStyle(fontSize: 13),
                   ),
                   const SizedBox(height: 12),
@@ -1079,7 +715,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       await widget.screenAutomationService
                           .openAccessibilitySettings();
                     },
-                    icon: const Icon(Icons.settings),
+                    icon: const Icon(Icons.tune_rounded),
                     label: const Text('Open Accessibility Settings'),
                   ),
                 ] else ...[

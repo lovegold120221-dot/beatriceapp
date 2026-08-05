@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/agent_action.dart';
@@ -11,14 +12,15 @@ class AiResponse {
 }
 
 class AiService {
-  static const String _defaultBaseUrl = 'https://api.deepseek.com';
-  static const String _defaultModel = 'deepseek-chat';
+  static const String _defaultBaseUrl =
+      'https://generativelanguage.googleapis.com/v1beta/openai';
+  static const String _defaultModel = 'gemini-3.1-flash-lite';
   static const String nvidiaBaseUrl = 'https://integrate.api.nvidia.com/v1';
   static const String nvidiaDefaultModel = 'z-ai/glm-5.2';
 
   /// Free, general-purpose chat endpoints verified in NVIDIA's NIM catalog.
   /// The live /models response is intersected with this list so unavailable or
-  /// non-chat models never appear in PrivateAgent's NVIDIA model picker.
+  /// non-chat models never appear in Beatrice OS's NVIDIA model picker.
   static const List<String> nvidiaFreeChatModels = [
     'z-ai/glm-5.2',
     'nvidia/nemotron-3-nano-30b-a3b',
@@ -54,13 +56,19 @@ class AiService {
   int _maxSteps = 15;
   bool _disableMaxSteps = false;
   double _temperature = 1.0;
-  int _maxTokens = 1024;
+  int _maxTokens = 8012;
   bool _useScreenCompression = true;
   bool _useSystemPrompt = true;
   final List<Map<String, String>> _conversationHistory = [];
 
+  /// Per-task step memory. Each entry is a prior (user prompt, assistant
+  /// action) pair from the *current* task run. This is sent alongside the
+  /// system prompt so the LLM remembers what it already did and doesn't
+  /// hallucinate or repeat actions. Cleared via [clearTaskHistory].
+  final List<Map<String, String>> _taskHistory = [];
+
   static const String _systemPrompt = '''
-You are PrivateAgent, a helpful AI assistant that controls an Android phone. You can perform device actions and also have normal conversations.
+You are Beatrice OS, a helpful AI assistant that controls an Android phone. You can perform device actions and also have normal conversations.
 
 When the user wants to perform a device action, you MUST respond with ONLY a JSON object (no markdown, no code fences, no extra text) in this exact format:
 {"action": "action_name", "params": {"key": "value"}, "response": "What you say to the user"}
@@ -100,7 +108,7 @@ For normal conversation (questions, chat, info requests), just respond with plai
 ''';
 
   static const String _chatSystemPrompt = '''
-You are PrivateAgent, a helpful conversational AI assistant. 
+You are Beatrice OS, a helpful conversational AI assistant. 
 Provide direct, natural, and friendly text responses. You cannot perform device actions or run tools. 
 Answer questions, explain concepts, brainstorm, write emails/messages, and chat with the user in plain text or markdown format.
 ''';
@@ -113,9 +121,34 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
     _maxSteps = prefs.getInt('api_max_steps') ?? 15;
     _disableMaxSteps = prefs.getBool('api_disable_max_steps') ?? false;
     _temperature = prefs.getDouble('api_temperature') ?? 1.0;
-    _maxTokens = prefs.getInt('api_max_tokens') ?? 1024;
+    _maxTokens = prefs.getInt('api_max_tokens') ?? 8012;
     _useScreenCompression = prefs.getBool('api_use_screen_compression') ?? true;
     _useSystemPrompt = prefs.getBool('api_use_system_prompt') ?? true;
+
+    // Fall back to a developer-local API key bundled via a gitignored asset
+    // (assets/local_config/ai_test_config.json) when none is saved yet, so the
+    // app boots pre-configured without committing secrets to the repo.
+    if (_apiKey == null || _apiKey!.isEmpty) {
+      _apiKey = await _loadLocalConfigApiKey();
+    }
+  }
+
+  /// Reads the bundled (gitignored) local test config, if present, and returns
+  /// the API key. Returns null when the asset is absent or unreadable.
+  Future<String?> _loadLocalConfigApiKey() async {
+    try {
+      final raw = await rootBundle.loadString(
+        'assets/local_config/ai_test_config.json',
+      );
+      final json = jsonDecode(raw);
+      if (json is Map<String, dynamic>) {
+        final key = json['api_key'];
+        if (key is String && key.trim().isNotEmpty) return key.trim();
+      }
+    } catch (_) {
+      // Asset missing or malformed — not an error; user can paste a key in Settings.
+    }
+    return null;
   }
 
   Future<void> saveSettings({
@@ -207,6 +240,22 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
     }
   }
 
+  /// Reset the per-task step memory. Call at the start of a new task run.
+  void clearTaskHistory() {
+    _taskHistory.clear();
+  }
+
+  /// Record a step from the current task so the LLM remembers prior actions
+  /// on the next call. Keeps the last 8 steps to stay within token budgets.
+  void addTaskHistoryStep(String userPrompt, String assistantAction) {
+    _taskHistory.add({'role': 'user', 'content': userPrompt});
+    _taskHistory.add({'role': 'assistant', 'content': assistantAction});
+    // Keep the last 8 steps (16 messages: user+assistant pairs).
+    while (_taskHistory.length > 16) {
+      _taskHistory.removeRange(0, _taskHistory.length - 16);
+    }
+  }
+
   /// Send a message to the AI and get a response.
   Future<String> sendMessage(String message, {bool isAgentMode = true}) async {
     if (_apiKey == null || _apiKey!.isEmpty) {
@@ -259,7 +308,7 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
               'Content-Type': 'application/json',
               'Authorization': 'Bearer $_apiKey',
               'HTTP-Referer': 'https://github.com/orailnoor/private-agent',
-              'X-Title': 'PrivateAgent',
+              'X-Title': 'Beatrice OS',
             },
             body: requestBody,
           )
@@ -358,7 +407,7 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $_apiKey',
         'HTTP-Referer': 'https://github.com/orailnoor/private-agent',
-        'X-Title': 'PrivateAgent',
+        'X-Title': 'Beatrice OS',
       });
 
       request.body = jsonEncode({
@@ -480,8 +529,11 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
     while (true) {
       try {
         currentTry++;
-        final messages = [
+        final messages = <Map<String, String>>[
           if (_useSystemPrompt) {'role': 'system', 'content': systemPrompt},
+          // Replay prior steps of this task so the LLM has full context and
+          // doesn't hallucinate or repeat already-tried actions.
+          ..._taskHistory,
           {'role': 'user', 'content': prompt},
         ];
 
@@ -501,7 +553,7 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
                 'Content-Type': 'application/json',
                 'Authorization': 'Bearer $_apiKey',
                 'HTTP-Referer': 'https://github.com/orailnoor/private-agent',
-                'X-Title': 'PrivateAgent',
+                'X-Title': 'Beatrice OS',
               },
               body: jsonEncode({
                 'model': _model,
@@ -560,7 +612,7 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
         int delaySeconds = 3 * currentTry;
         developer.log(
           'API call failed ($e), retrying $currentTry/$maxRetries in $delaySeconds seconds...',
-          name: 'PrivateAgent',
+          name: 'BeatriceOS',
         );
         await Future.delayed(Duration(seconds: delaySeconds));
       }

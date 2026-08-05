@@ -73,8 +73,8 @@ class MessageBubble extends StatelessWidget {
                   children: [
                     Icon(
                       message.actionResult!.success
-                          ? Icons.check_circle_rounded
-                          : Icons.error_rounded,
+                          ? Icons.check_rounded
+                          : Icons.error_outline_rounded,
                       size: 14,
                       color: message.actionResult!.success
                           ? Colors.green

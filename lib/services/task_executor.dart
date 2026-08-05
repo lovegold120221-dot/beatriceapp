@@ -87,6 +87,20 @@ Rules:
 - If you need to open an app (like Wikipedia, Spotify, etc.) and you cannot find it after a couple of scrolls, ASSUME it is not installed. Immediately open Chrome or Google to search for the info on the web instead.
 - If stuck after 3 attempts, set is_complete=true and explain in reasoning.
 - Keep reasoning very brief (1 sentence)
+
+App-specific navigation patterns (use these when relevant):
+- YouTube: To play a video, open YouTube → tap the "Search" icon → type the video name → press_enter → tap the first video thumbnail (use click_at with its coordinates if it has no text). The search icon is usually in the top-right area.
+- YouTube: Video thumbnails often have no clickable text. Use the coordinates from the screen dump to click_at the thumbnail center.
+- YouTube: The search bar may show as "Search" or "Search YouTube" — tap it to focus, then type.
+- Spotify: Search is at the bottom. Type query, tap the song/artist from results.
+- WhatsApp: To send a message, open WhatsApp → tap the contact/chat → type in the message field → tap send.
+- Settings: Use scroll to find options. Toggle switches by tapping them.
+- Google Maps: Type the place in the search bar → tap the result → use coordinates if needed.
+- Browser/Chrome: Type URL or search query directly in the address bar.
+
+CRITICAL: When a screen shows items with coordinates but no text (like video thumbnails), use click_at with those coordinates. Do NOT use click_text for image-only elements.
+CRITICAL: After opening an app, WAIT for it to load before trying to interact. The screen may show a loading state.
+CRITICAL: If an action fails, look at the current screen again and try a DIFFERENT approach. Do not repeat the exact same failed action.
 ''';
 
   /// Extract JSON safely even if wrapped in markdown or conversational text
@@ -126,12 +140,15 @@ Rules:
       await ScreenAutomationService.logToNative(
         "[TaskExecutor] Accessibility service not running, returning early.",
       );
-      return 'Accessibility service is not enabled. Go to Settings \u2192 Accessibility \u2192 PrivateAgent Screen Control and enable it.';
+      return 'Accessibility service is not enabled. Go to Settings \u2192 Accessibility \u2192 Beatrice OS Screen Control and enable it.';
     }
 
     final results = <String>[];
     results.add('Starting task: $userGoal');
     _report('Starting task: $userGoal');
+
+    // Reset per-task context memory so the LLM starts fresh each run.
+    _aiService.clearTaskHistory();
 
     // Check skill memory first
     final savedSkill = await _skillMemory.findSkill(userGoal);
@@ -197,10 +214,10 @@ Rules:
         }
       }
     } else {
-      // If no shortcut is used, and we are currently inside the PrivateAgent app,
+      // If no shortcut is used, and we are currently inside the Beatrice OS app,
       // press Home so the AI doesn't see its own chat bubbles and get confused by the task text.
       final currentPkg = await _screenService.getCurrentPackage();
-      if (currentPkg == 'com.orailnoor.privateagent') {
+      if (currentPkg == 'ai.eburon.beatrice') {
         _report('Moving to background...');
         await _screenService.pressHome();
         await Future.delayed(const Duration(milliseconds: 1500));
@@ -230,14 +247,16 @@ Rules:
       // Adaptive delay: give Android apps time to transition screens, load data, or open keyboards
       int delay = 1200; // Default 1.2s delay for most actions
       if (lastAction == 'open_app') {
-        delay = 3000; // Apps need ~3 seconds to fully cold-start and render
+        delay = 5000; // Apps need ~5 seconds to fully cold-start and render
       } else if (lastAction == 'type_text') {
         delay =
             2000; // Typing involves keyboards and often triggers heavy network requests (search)
       } else if (lastAction == 'click_text' || lastAction == 'click_at') {
-        delay = 1500; // Clicking usually triggers a screen transition
+        delay = 2000; // Clicking usually triggers a screen transition
       } else if (lastAction == 'scroll') {
         delay = 1000; // Scrolling is relatively fast
+      } else if (lastAction == 'press_enter') {
+        delay = 3000; // Search results need time to load
       }
       await Future.delayed(Duration(milliseconds: delay));
 
@@ -247,7 +266,7 @@ Rules:
           : await _screenService.getScreenDescription();
       developer.log(
         '=== SCREEN DUMP (Step ${step + 1}) ===\n$screenContent',
-        name: 'PrivateAgent',
+        name: 'BeatriceOS',
       );
 
       // Determine previous result string
@@ -270,7 +289,7 @@ CURRENT SCREEN TEXT DUMP:
 $screenContent$prevResultStr$failureHint
 Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. What is the next action?''';
 
-      developer.log('=== AI PROMPT ===\n$prompt', name: 'PrivateAgent');
+      developer.log('=== AI PROMPT ===\n$prompt', name: 'BeatriceOS');
 
       // 3. Get AI response — races against cancel signal so Stop works immediately
       String response;
@@ -302,13 +321,13 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
           return 'Task cancelled.';
         }
 
-        final aiResponse = result as AiResponse;
+        final aiResponse = result;
         response = aiResponse.content;
         totalTokens += aiResponse.totalTokens;
 
         developer.log(
           '=== RAW AI RESPONSE ===\n$response',
-          name: 'PrivateAgent',
+          name: 'BeatriceOS',
         );
       } catch (e) {
         if (_cancelled) {
@@ -369,17 +388,15 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
 
       // 4. Parse the action (with one retry on failure)
       Map<String, dynamic>? actionJson;
-      String? parsedJsonStr;
       try {
         String jsonStr = _extractJson(response);
 
         actionJson = jsonDecode(jsonStr) as Map<String, dynamic>;
-        parsedJsonStr = jsonStr;
       } catch (firstError) {
         // First attempt failed — retry once
         developer.log(
           '=== JSON PARSE FAILED, RETRYING ===\nError: $firstError\nRaw: $response',
-          name: 'PrivateAgent',
+          name: 'BeatriceOS',
         );
         _report('Retrying step ${step + 1}...\n(Failed to parse: $firstError)');
         // Wait 2 seconds before retrying to prevent rate-limit spam
@@ -392,12 +409,11 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
           totalTokens += retryResponse.totalTokens;
           developer.log(
             '=== RETRY AI RESPONSE ===\n${retryResponse.content}',
-            name: 'PrivateAgent',
+            name: 'BeatriceOS',
           );
 
           String jsonStr = _extractJson(retryResponse.content);
           actionJson = jsonDecode(jsonStr) as Map<String, dynamic>;
-          parsedJsonStr = jsonStr;
         } catch (e) {
           results.add('Step ${step + 1}: Error after retry: $e');
 
@@ -428,10 +444,16 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
 
       developer.log(
         '=== PARSED ACTION ===\nAction: $action\nParams: $params\nReasoning: $reasoning\nIs Complete: $isComplete',
-        name: 'PrivateAgent',
+        name: 'BeatriceOS',
       );
 
       _report('Step ${step + 1}: $reasoning');
+
+      // Record this step in the task context memory so the next call carries
+      // full history and the LLM doesn't hallucinate or repeat actions.
+      final compactAction = '{"action": "$action", "params": $params, '
+          '"reasoning": "$reasoning", "is_complete": $isComplete}';
+      _aiService.addTaskHistoryStep(prompt, compactAction);
 
       sameActionCount = action == lastAction ? sameActionCount + 1 : 1;
       final repeatLimit = action == 'press_enter'
@@ -515,6 +537,9 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
           final appName = params['app_name'] as String? ?? '';
           actionResult = await _appLauncher.openApp(appName);
           success = actionResult.startsWith('Opened');
+          if (success) {
+            await _screenService.showToast('Opened $appName');
+          }
           break;
 
         case 'wait':
@@ -539,7 +564,7 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
 
       developer.log(
         '=== NATIVE EXECUTION RESULT ===\n$actionResult',
-        name: 'PrivateAgent',
+        name: 'BeatriceOS',
       );
 
       // Track consecutive failures to detect stuck loops
@@ -796,7 +821,7 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
       results.add('Memory Replay Step ${i + 1}: $actionResult');
       developer.log(
         '=== MEMORY REPLAY RESULT ===\n$actionResult',
-        name: 'PrivateAgent',
+        name: 'BeatriceOS',
       );
 
       if (!success) {

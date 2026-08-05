@@ -1,6 +1,9 @@
-# PrivateAgent
+# Beatrice OS
 
-PrivateAgent is an open-source Android automation agent built with Flutter. It utilizes the DeepSeek API and native Android Accessibility Services to interpret screen layouts and execute multi-step tasks across any installed application via natural language commands.
+Beatrice OS is an open-source Android automation agent built with Flutter. It
+uses an OpenAI-compatible LLM (defaults to Google Gemini) and native Android
+Accessibility Services to interpret screen layouts and execute multi-step tasks
+across any installed application via natural language commands.
 
 ## Architecture
 
@@ -28,41 +31,42 @@ Choose `app-universal-release.apk` when it is available. It supports ARM64,
 APKs, most modern Android phones—including Snapdragon devices—must use
 `app-arm64-v8a-release.apk`.
 
-PrivateAgent supports Android 8.0 (API 26) and newer. Current release builds are
+Beatrice OS supports Android 8.0 (API 26) and newer. Current release builds are
 also checked for Android 15/16's 16 KB native-library alignment requirement.
 
 ## Setup Instructions (How to use for FREE)
 
-This app requires an AI brain to operate. You can use it **100% for free** by using OpenRouter's free models.
+This app requires an AI brain to operate. It ships pre-configured with Google
+Gemini, but you can also use it **100% for free** via OpenRouter's free models.
 
 1. Install the APK on your Android device (API 30+ recommended).
 2. Go to [OpenRouter.ai](https://openrouter.ai/) and create a free account.
 3. Generate a free API Key.
-4. Launch PrivateAgent and go to the **Settings** screen.
+4. Launch Beatrice OS and go to the **Settings** screen.
 5. Tap the **"OpenRouter"** quick-select chip under Base URL.
 6. Paste your API Key.
 7. Type `openai/gpt-oss-120b:free` (or any other free model) into the Model field.
-8. Enable the **"PrivateAgent Screen Control"** service in your Android Accessibility Settings.
+8. Enable the **"Beatrice OS Screen Control"** service in your Android Accessibility Settings.
 
-### “Restricted setting” when enabling Screen Control
+### "Restricted setting" when enabling Screen Control
 
 Android may block accessibility access for apps installed from an APK. This is
 an operating-system safety restriction:
 
-1. Open **Settings → Apps → PrivateAgent**.
+1. Open **Settings → Apps → Beatrice OS**.
 2. Open the three-dot menu in the top-right corner.
 3. Tap **Allow restricted settings** and confirm.
-4. Return to PrivateAgent and open **Accessibility Settings** again.
-5. Enable **PrivateAgent Screen Control**.
+4. Return to Beatrice OS and open **Accessibility Settings** again.
+5. Enable **Beatrice OS Screen Control**.
 
-PrivateAgent now shows these instructions and provides shortcuts to both App
+Beatrice OS now shows these instructions and provides shortcuts to both App
 Info and Accessibility Settings during onboarding.
 
 ## Telegram Integration
 
 To enable remote access:
 1. Acquire a bot token from BotFather on Telegram.
-2. Input the token in the PrivateAgent Settings screen and enable the integration toggle.
+2. Input the token in the Beatrice OS Settings screen and enable the integration toggle.
 3. The application will maintain a background polling connection to the Telegram API to receive commands.
 
 ## License

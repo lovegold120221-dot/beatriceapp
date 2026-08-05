@@ -21,14 +21,21 @@ class SkillMemoryService {
         return;
       }
       final lines = await file.readAsLines();
-      _skills = lines
-          .where((line) => line.trim().isNotEmpty)
-          .map((line) => SavedSkill.fromJson(jsonDecode(line) as Map<String, dynamic>))
-          .toList();
-      _isLoaded = true;
+      for (final line in lines) {
+        if (line.trim().isEmpty) continue;
+        try {
+          _skills.add(
+            SavedSkill.fromJson(jsonDecode(line) as Map<String, dynamic>),
+          );
+        } catch (_) {
+          // Skip a single corrupt line instead of losing all skills.
+        }
+      }
     } catch (e) {
       print('Failed to load skills: $e');
     }
+    // Always mark as loaded so we don't retry on every call (soft lockout).
+    _isLoaded = true;
   }
 
   Future<void> _saveAllSkills() async {

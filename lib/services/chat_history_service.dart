@@ -113,10 +113,17 @@ class ChatHistoryService {
       final content = await file.readAsString();
       if (content.trim().isEmpty) return [];
 
-      final decoded = jsonDecode(content) as List;
-      return decoded
-          .map((item) => ChatSession.fromJson(item as Map<String, dynamic>))
-          .toList();
+      final decoded = jsonDecode(content);
+      if (decoded is! List) return [];
+      final sessions = <ChatSession>[];
+      for (final item in decoded) {
+        try {
+          sessions.add(ChatSession.fromJson(item as Map<String, dynamic>));
+        } catch (_) {
+          // Skip a single corrupt session instead of losing all history.
+        }
+      }
+      return sessions;
     } catch (e) {
       print('Error loading chat sessions: $e');
       return [];

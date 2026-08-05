@@ -60,6 +60,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _initServices() async {
     await _aiService.init();
+    // Preload YOLO26 vision model for screen-reading augmentation.
+    await _actionHandler.screenAutomation.preloadVision();
     await _notificationService.requestPermission();
     await _voiceService.init();
     await _telegramService.init();
@@ -161,7 +163,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           action,
           aiService: _aiService,
           onProgress: (msg) {
-            developer.log('Task progress: $msg', name: 'PrivateAgent');
+            developer.log('Task progress: $msg', name: 'BeatriceOS');
             _sendOverlayEvent('OVERLAY_PROGRESS', msg);
             if (mounted) {
               setState(() {
@@ -238,14 +240,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!FeatureFlags.floatingOverlayEnabled) return;
     if (!await FlutterOverlayWindow.isPermissionGranted()) return;
 
-    // Never cover PrivateAgent itself. The lifecycle observer will create the
+    // Never cover Beatrice OS itself. The lifecycle observer will create the
     // overlay after an automated action moves this app to the background.
     if (_appLifecycleState != AppLifecycleState.paused) return;
 
     if (!await FlutterOverlayWindow.isActive()) {
       await FlutterOverlayWindow.showOverlay(
         enableDrag: true,
-        overlayTitle: 'PrivateAgent',
+        overlayTitle: 'Beatrice OS',
         overlayContent: 'Performing task...',
         flag: OverlayFlag.focusPointer,
         alignment: OverlayAlignment.centerRight,
@@ -435,7 +437,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (await FlutterOverlayWindow.isActive()) return;
       await FlutterOverlayWindow.showOverlay(
         enableDrag: true,
-        overlayTitle: "PrivateAgent",
+        overlayTitle: "Beatrice OS",
         overlayContent: _isLoading
             ? "Performing task..."
             : "Floating Assistant",
@@ -491,7 +493,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
             children: [
               TextSpan(
-                text: 'Private',
+                text: 'Beatrice',
                 style: TextStyle(
                   fontWeight: FontWeight.w900,
                   color: Theme.of(context).colorScheme.primary,
@@ -499,7 +501,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ),
               const TextSpan(
-                text: 'Agent',
+                text: ' OS',
                 style: TextStyle(
                   fontWeight: FontWeight.w400,
                   letterSpacing: -0.5,
@@ -512,20 +514,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         scrolledUnderElevation: 0,
         leading: Builder(
           builder: (context) => IconButton(
-            icon: const Icon(Icons.menu_rounded),
+            icon: const Icon(Icons.drag_indicator_rounded),
             tooltip: 'Menu',
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_comment_outlined),
+            icon: const Icon(Icons.edit_note_rounded),
             tooltip: 'New chat',
             onPressed: _isLoading ? null : _startNewChat,
           ),
           // Settings Action
           IconButton(
-            icon: const Icon(Icons.settings_rounded),
+            icon: const Icon(Icons.tune_rounded),
             onPressed: () async {
               await Navigator.push(
                 context,
@@ -559,6 +561,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
           Column(
             children: [
+              const SizedBox(height: 25),
               // Pill selector switcher
               _buildModeSelector(isDark),
 
@@ -583,7 +586,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   child: Row(
                     children: [
                       const Icon(
-                        Icons.warning_amber_rounded,
+                        Icons.error_outline_rounded,
                         color: Colors.orange,
                       ),
                       const SizedBox(width: 12),
@@ -700,6 +703,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
               // Custom Input bar
               _buildInputBar(isDark),
+              const SizedBox(height: 25),
             ],
           ),
         ],
@@ -737,12 +741,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             child: Row(
               children: [
                 Icon(
-                  Icons.smart_toy_rounded,
+                  Icons.auto_awesome_rounded,
                   color: Theme.of(context).primaryColor,
                   size: 26,
                 ),
                 const SizedBox(width: 12),
-                Text('PrivateAgent', style: headerStyle),
+                Text('Beatrice OS', style: headerStyle),
               ],
             ),
           ),
@@ -779,7 +783,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          Icons.add_comment_rounded,
+                          Icons.add_circle_outline_rounded,
                           color: Colors.white,
                           size: 16,
                         ),
@@ -871,7 +875,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ),
                         dense: true,
                         leading: Icon(
-                          Icons.chat_bubble_outline_rounded,
+                          Icons.forum_outlined,
                           size: 15,
                           color: isCurrent
                               ? Theme.of(context).colorScheme.primary
@@ -894,7 +898,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ),
                         trailing: IconButton(
                           icon: Icon(
-                            Icons.delete_outline_rounded,
+                            Icons.close_rounded,
                             size: 16,
                             color: Colors.redAccent.withOpacity(0.7),
                           ),
@@ -925,7 +929,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ListTile(
             horizontalTitleGap: 8,
             leading: Icon(
-              Icons.history_rounded,
+              Icons.manage_history_rounded,
               color: isDark ? Colors.grey[400] : Colors.grey[600],
               size: 20,
             ),
@@ -941,7 +945,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ListTile(
             horizontalTitleGap: 8,
             leading: Icon(
-              Icons.settings_rounded,
+              Icons.tune_rounded,
               color: isDark ? Colors.grey[400] : Colors.grey[600],
               size: 20,
             ),
@@ -1044,7 +1048,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             _buildModeButton(
               'agent',
               'Agent',
-              Icons.smart_toy_outlined,
+              Icons.auto_awesome_outlined,
               isDark,
             ),
           ],
@@ -1297,7 +1301,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
             child: IconButton(
               icon: Icon(
-                _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
+                _isListening ? Icons.graphic_eq_rounded : Icons.mic_none_rounded,
                 color: _isListening
                     ? Colors.white
                     : Theme.of(context).colorScheme.primary,
@@ -1363,8 +1367,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                     child: IconButton(
                       icon: const Icon(
-                        Icons.send_rounded,
-                        size: 16,
+                        Icons.arrow_upward_rounded,
+                        size: 18,
                         color: Colors.white,
                       ),
                       onPressed: _isLoading

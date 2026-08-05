@@ -35,12 +35,16 @@ class TaskHistoryLogger {
       if (!await file.exists()) return [];
 
       final lines = await file.readAsLines();
-      return lines
-          .where((line) => line.trim().isNotEmpty)
-          .map((line) => jsonDecode(line) as Map<String, dynamic>)
-          .toList()
-          .reversed
-          .toList(); // newest first
+      final history = <Map<String, dynamic>>[];
+      for (final line in lines) {
+        if (line.trim().isEmpty) continue;
+        try {
+          history.add(jsonDecode(line) as Map<String, dynamic>);
+        } catch (_) {
+          // Skip a single corrupt line instead of losing the whole history.
+        }
+      }
+      return history.reversed.toList(); // newest first
     } catch (e) {
       print('Failed to read task history: $e');
       return [];

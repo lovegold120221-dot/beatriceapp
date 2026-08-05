@@ -3,18 +3,18 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 class ContactsService {
   /// Search contacts by name. Returns formatted results.
   Future<List<Contact>> searchContacts(String query) async {
-    if (!await FlutterContacts.requestPermission()) {
+    final granted = await FlutterContacts.permissions.request(PermissionType.read);
+    if (granted != PermissionStatus.granted && granted != PermissionStatus.limited) {
       return [];
     }
 
-    final contacts = await FlutterContacts.getContacts(
-      withProperties: true,
-      withPhoto: false,
+    final contacts = await FlutterContacts.getAll(
+      properties: {ContactProperty.phone, ContactProperty.email},
     );
 
     final lowerQuery = query.toLowerCase();
     return contacts.where((c) {
-      return c.displayName.toLowerCase().contains(lowerQuery);
+      return (c.displayName ?? '').toLowerCase().contains(lowerQuery);
     }).toList();
   }
 

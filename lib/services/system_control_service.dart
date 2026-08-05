@@ -4,14 +4,14 @@ import 'package:screen_brightness/screen_brightness.dart';
 class SystemControlService {
   SystemControlService() {
     // Don't show system volume UI when we control it
-    VolumeController().showSystemUI = false;
+    VolumeController.instance.showSystemUI = false;
   }
 
   /// Set media volume (0-100)
   Future<String> setVolume(int level) async {
     try {
       final volume = (level / 100).clamp(0.0, 1.0);
-      VolumeController().setVolume(volume);
+      VolumeController.instance.setVolume(volume);
       return 'Volume set to $level%';
     } catch (e) {
       return 'Error setting volume: $e';
@@ -21,7 +21,7 @@ class SystemControlService {
   /// Get current volume (0-100)
   Future<int> getVolume() async {
     try {
-      final volume = await VolumeController().getVolume();
+      final volume = await VolumeController.instance.getVolume();
       return (volume * 100).round();
     } catch (e) {
       return -1;

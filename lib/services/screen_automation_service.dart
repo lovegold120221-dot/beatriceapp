@@ -1,12 +1,19 @@
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:developer' as developer;
+import 'dart:typed_data';
+import 'vision_service.dart';
 
 /// Dart bridge to the native AccessibilityService.
 /// Provides screen reading, UI element interaction, and gesture control.
+/// Augments sparse accessibility trees with YOLO26 visual detection.
 class ScreenAutomationService {
-  static const _channel = MethodChannel('com.privateagent/accessibility');
+  static const _channel = MethodChannel('ai.eburon.beatrice/accessibility');
   static const _channelTimeout = Duration(seconds: 3);
+  static const int _sparseThreshold = 5;
+
+  final VisionService _vision = VisionService();
 
   static Future<T?> _invoke<T>(String method, [Map<String, Object?>? arguments]) {
     return _channel
@@ -25,7 +32,7 @@ class ScreenAutomationService {
       return await _invoke<bool>('ping') ?? false;
     } catch (e) {
       developer.log('Accessibility channel readiness check failed: $e',
-          name: 'PrivateAgent');
+          name: 'BeatriceOS');
       return false;
     }
   }
@@ -80,11 +87,24 @@ class ScreenAutomationService {
     }
   }
 
-  /// Get a simplified text description of the current screen for the LLM
+  /// Preload the YOLO26 vision model so it's ready when screen reading needs
+  /// visual augmentation. Call at app startup (non-blocking — runs in the
+  /// background; screen reading works without it loaded).
+  Future<void> preloadVision() async {
+    // Fire and forget — don't block app startup if the model isn't bundled.
+    _vision.load().catchError((e) {
+      developer.log('Vision model preload skipped: $e', name: 'BeatriceOS');
+    });
+  }
+
+  /// Get a simplified text description of the current screen for the LLM.
+  /// When the accessibility tree is sparse (Canvas/games/image apps), augments
+  /// with YOLO26 visual detection from a screenshot.
   Future<String> getScreenDescription() async {
     final nodes = await dumpScreen();
     if (nodes.isEmpty) {
-      return 'Could not read screen. Make sure accessibility service is enabled.';
+      // No accessibility data at all — try vision-only.
+      return await _visionFallback(null);
     }
 
     final buffer = StringBuffer();
@@ -94,7 +114,6 @@ class ScreenAutomationService {
     }
     buffer.writeln('Screen elements:');
 
-    int count = 0;
     // Limit removed as requested by user. Kotlin now filters invisibles, so this is safe.
 
     for (final node in nodes) {
@@ -134,17 +153,47 @@ class ScreenAutomationService {
       }
 
       buffer.writeln('  [$index] $type $label $tagStr$boundsStr');
-      count++;
+    }
+
+    // If the accessibility tree is sparse, augment with YOLO26 vision.
+    if (nodes.length < _sparseThreshold) {
+      final vision = await _tryVisionAugment();
+      if (vision.isNotEmpty) buffer.writeln(vision);
     }
 
     return buffer.toString();
+  }
+
+  /// Try to augment the screen dump with YOLO26 visual detection. Takes a
+  /// screenshot and runs inference. Returns the vision description or empty
+  /// string if unavailable.
+  Future<String> _tryVisionAugment() async {
+    try {
+      final screenshot = await takeScreenshot();
+      if (screenshot == null || screenshot.isEmpty) return '';
+      // takeScreenshot() returns a base64-encoded PNG string.
+      final bytes = Uint8List.fromList(base64Decode(screenshot));
+      return await _vision.detectObjects(bytes);
+    } catch (e) {
+      developer.log('Vision augment failed: $e', name: 'BeatriceOS');
+      return '';
+    }
+  }
+
+  /// Vision-only fallback when the accessibility tree is completely empty.
+  Future<String> _visionFallback(String? _) async {
+    final vision = await _tryVisionAugment();
+    if (vision.isNotEmpty) return vision;
+    return 'Could not read screen (accessibility tree empty, vision unavailable). '
+        'Make sure accessibility service is enabled.';
   }
 
   /// Get a highly compressed text description of the screen for the LLM
   Future<String> getCompressedScreenDescription(String task) async {
     final nodes = await dumpScreen();
     if (nodes.isEmpty) {
-      return 'Could not read screen. Make sure accessibility service is enabled.';
+      // No accessibility data — try vision-only.
+      return await _visionFallback(null);
     }
 
     final buffer = StringBuffer();
@@ -180,13 +229,16 @@ class ScreenAutomationService {
         continue;
       }
 
+      // Include interactive elements even without text — YouTube thumbnails,
+      // icon buttons, and image-only UI rely on coordinates, not text.
       if (displayText.isEmpty && !isClickable && !isEditable && !isScrollable) {
         continue; // Skip empty non-interactive nodes
       }
 
-      // Truncate very long text to save tokens
-      if (displayText.length > 50) {
-        displayText = '${displayText.substring(0, 50)}...';
+      // Truncate very long text to save tokens (increased from 50 to 80
+      // so YouTube video titles stay readable).
+      if (displayText.length > 80) {
+        displayText = '${displayText.substring(0, 80)}...';
       }
 
       final tags = <String>[];
@@ -204,7 +256,7 @@ class ScreenAutomationService {
       else if (type == 'FrameLayout' || type == 'LinearLayout') type = 'view';
       else type = type.toLowerCase();
 
-      final label = displayText.isNotEmpty ? '"$displayText"' : '';
+      final label = displayText.isNotEmpty ? '"$displayText"' : '(no text)';
       final tagStr = tags.isNotEmpty ? '[${tags.join(",")}]' : '';
       
       // Highlight if matches task
@@ -229,6 +281,12 @@ class ScreenAutomationService {
       }
 
       buffer.writeln('[$index]$targetMark $type $label $tagStr$boundsStr'.trim().replaceAll(RegExp(r'\s+'), ' '));
+    }
+
+    // If the accessibility tree is sparse, augment with YOLO26 vision.
+    if (nodes.length < _sparseThreshold) {
+      final vision = await _tryVisionAugment();
+      if (vision.isNotEmpty) buffer.writeln(vision);
     }
 
     final screenString = buffer.toString();

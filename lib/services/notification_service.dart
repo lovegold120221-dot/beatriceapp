@@ -17,7 +17,9 @@ class NotificationService {
     const InitializationSettings initializationSettings =
         InitializationSettings(android: initializationSettingsAndroid);
 
-    await _notificationsPlugin.initialize(initializationSettings);
+    await _notificationsPlugin.initialize(
+      settings: initializationSettings,
+    );
     _initialized = true;
   }
 
@@ -56,10 +58,10 @@ class NotificationService {
     );
 
     await _notificationsPlugin.show(
-      _nextNotificationId++,
-      title,
-      body,
-      platformChannelSpecifics,
+      id: _nextNotificationId++,
+      title: title,
+      body: body,
+      notificationDetails: platformChannelSpecifics,
     );
   }
 }
