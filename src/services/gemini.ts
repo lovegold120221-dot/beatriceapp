@@ -34,7 +34,7 @@ YOUR CONVERSATIONAL STYLE:
 
 RULES:
 - Never sound like a scripted assistant. No "How can I assist you today?" or "As an AI...".
-- If asked, you're Beatrice from Eburon AI. But don't force it.
+- If asked, you're Beatrice from Beatrice OS. But don't force it.
 - For voice: keep responses concise. Long monologues kill the vibe.
 - For text: you can go deeper, but keep the same relaxed, human tone.
 - If the user is serious or technical, adapt — tone down the slang, keep the warmth.
@@ -42,7 +42,7 @@ RULES:
 - Reference things the user said earlier in the conversation. Show you're actually listening.
 
 Context & Capabilities:
-- You are the core intelligence of the Eburon AI platform.
+- You are the core intelligence of the Beatrice OS platform.
 - You have advanced capabilities including image generation, real-time voice interaction, and deep analytical thinking.`;
 
 export function createChat(
@@ -268,7 +268,9 @@ export function connectLive(
   onerror: (error: any) => void,
   onclose: () => void,
   userContext = '',
-  responseStyle = ''
+  responseStyle = '',
+  voiceName = 'Aoede',
+  language = 'English'
 ) {
   if (!ai) throw new Error("API key not configured");
 
@@ -333,6 +335,9 @@ WHAT YOU NEVER DO:
   if (responseStyle) {
     finalSystemPrompt += `\n\nResponse Style (How you should respond):\n${responseStyle}`;
   }
+  if (language && language !== 'English') {
+    finalSystemPrompt += `\n\nLANGUAGE: The user wants to converse in ${language}. Speak in ${language} naturally. If you mix in English, keep it minimal and natural. Your backchannels and thinking sounds should match ${language} conventions.`;
+  }
 
   const sessionPromise = ai.live.connect({
     model: models.live,
@@ -346,7 +351,7 @@ WHAT YOU NEVER DO:
       generationConfig: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } },
+          voiceConfig: { prebuiltVoiceConfig: { voiceName } },
         },
       },
       systemInstruction: { parts: [{ text: finalSystemPrompt }] },

@@ -69,6 +69,59 @@ interface Message {
 
 type ViewState = 'splash' | 'auth' | 'home' | 'chat';
 
+const GEMINI_VOICES = [
+  { name: 'Aoede', alias: 'Wonder Woman' },
+  { name: 'Puck', alias: 'Spider-Man' },
+  { name: 'Zephyr', alias: 'Storm' },
+  { name: 'Charon', alias: 'Batman' },
+  { name: 'Kore', alias: 'Captain Marvel' },
+  { name: 'Fenrir', alias: 'Wolverine' },
+  { name: 'Leda', alias: 'Black Widow' },
+  { name: 'Orus', alias: 'Thor' },
+  { name: 'Sulafat', alias: 'Iron Man' },
+];
+
+const GEMINI_LANGUAGES = [
+  'Flemish', 'Abkhaz', 'Acehnese', 'Acholi', 'Afar', 'Afrikaans', 'Albanian', 'Alur',
+  'Amharic', 'Arabic', 'Armenian', 'Assamese', 'Avar', 'Awadhi', 'Aymara', 'Azerbaijani',
+  'Balinese', 'Baluchi', 'Bambara', 'Baoulé', 'Bashkir', 'Basque', 'Batak Karo',
+  'Batak Simalungun', 'Batak Toba', 'Belarusian', 'Bemba', 'Bengali', 'Betawi',
+  'Bhojpuri', 'Bikol', 'Bosnian', 'Breton', 'Bulgarian', 'Buryat', 'Cantonese',
+  'Catalan', 'Cebuano', 'Chamorro', 'Chechen', 'Chichewa', 'Chinese (Simplified)',
+  'Chinese (Traditional)', 'Chuukese', 'Chuvash', 'Corsican', 'Crimean Tatar (Cyrillic)',
+  'Crimean Tatar (Latin)', 'Croatian', 'Czech', 'Danish', 'Dari', 'Dhivehi', 'Dinka',
+  'Dogri', 'Dombe', 'Dutch', 'Dyula', 'Dzongkha', 'English', 'Esperanto', 'Estonian',
+  'Ewe', 'Faroese', 'Fijian', 'Filipino', 'Finnish', 'Fon', 'French', 'French (Canada)',
+  'Frisian', 'Friulian', 'Fulani', 'Ga', 'Galician', 'Georgian', 'German', 'Greek',
+  'Guarani', 'Gujarati', 'Haitian Creole', 'Hakha Chin', 'Hausa', 'Hawaiian', 'Hebrew',
+  'Hiligaynon', 'Hindi', 'Hmong', 'Hungarian', 'Hunsrik', 'Iban', 'Icelandic', 'Igbo',
+  'Ilocano', 'Indonesian', 'Inuktut (Latin)', 'Inuktut (Syllabics)', 'Irish', 'Italian',
+  'Jamaican Patois', 'Japanese', 'Javanese', 'Jingpo', 'Kalaallisut', 'Kannada',
+  'Kanuri', 'Kapampangan', 'Kazakh', 'Khasi', 'Khmer', 'Kiga', 'Kikongo',
+  'Kinyarwanda', 'Kituba', 'Kokborok', 'Komi', 'Konkani', 'Korean', 'Krio',
+  'Kurdish (Kurmanji)', 'Kurdish (Sorani)', 'Kyrgyz', 'Lao', 'Latgalian', 'Latin',
+  'Latvian', 'Ligurian', 'Limburgish', 'Lingala', 'Lithuanian', 'Lombard', 'Luganda',
+  'Luo', 'Luxembourgish', 'Macedonian', 'Madurese', 'Maithili', 'Makassar',
+  'Malagasy', 'Malay', 'Malay (Jawi)', 'Malayalam', 'Maltese', 'Mam', 'Manx',
+  'Maori', 'Marathi', 'Marshallese', 'Marwadi', 'Mauritian Creole', 'Meadow Mari',
+  'Meiteilon (Manipuri)', 'Minang', 'Mizo', 'Mongolian', 'Myanmar (Burmese)',
+  'Nahuatl (Eastern Huasteca)', 'Ndau', 'Ndebele (South)', 'Nepalbhasa (Newari)',
+  'Nepali', 'NKo', 'Norwegian', 'Nuer', 'Occitan', 'Odia (Oriya)', 'Oromo',
+  'Ossetian', 'Pangasinan', 'Papiamento', 'Pashto', 'Persian', 'Polish',
+  'Portuguese (Brazil)', 'Portuguese (Portugal)', 'Punjabi (Gurmukhi)',
+  'Punjabi (Shahmukhi)', 'Quechua', 'Qʼeqchiʼ', 'Romani', 'Romanian', 'Rundi',
+  'Russian', 'Sami (North)', 'Samoan', 'Sango', 'Sanskrit', 'Santali (Latin)',
+  'Santali (Ol Chiki)', 'Scots Gaelic', 'Sepedi', 'Serbian', 'Sesotho',
+  'Seychellois Creole', 'Shan', 'Shona', 'Sicilian', 'Silesian', 'Sindhi',
+  'Sinhala', 'Slovak', 'Slovenian', 'Somali', 'Spanish', 'Sundanese', 'Susu',
+  'Swahili', 'Swati', 'Swedish', 'Tahitian', 'Tajik', 'Tamazight',
+  'Tamazight (Tifinagh)', 'Tamil', 'Tatar', 'Telugu', 'Tetum', 'Thai', 'Tibetan',
+  'Tigrinya', 'Tiv', 'Tok Pisin', 'Tongan', 'Tshiluba', 'Tsonga', 'Tswana',
+  'Tulu', 'Tumbuka', 'Turkish', 'Turkmen', 'Tuvan', 'Twi', 'Udmurt', 'Ukrainian',
+  'Urdu', 'Uyghur', 'Uzbek', 'Venda', 'Venetian', 'Vietnamese', 'Waray', 'Welsh',
+  'Wolof', 'Xhosa', 'Yakut', 'Yiddish', 'Yoruba', 'Yucatec Maya', 'Zapotec', 'Zulu',
+];
+
 const CodeBlock = ({ className, children, ...props }: any) => {
   const match = /language-(\w+)/.exec(className || '');
   const isInline = !match && !String(children).includes('\n');
@@ -176,16 +229,22 @@ export default function App() {
   const [responseStyle, setResponseStyle] = useState('');
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
   const [ollamaModel, setOllamaModel] = useState('');
+  const [voiceName, setVoiceName] = useState('Aoede');
+  const [language, setLanguage] = useState('English');
 
   useEffect(() => {
     const savedUserContext = localStorage.getItem('eburon_userContext');
     const savedResponseStyle = localStorage.getItem('eburon_responseStyle');
     const savedTheme = localStorage.getItem('eburon_theme') as 'light' | 'dark' | 'system' || 'system';
     const savedOllamaModel = localStorage.getItem('eburon_ollamaModel');
+    const savedVoiceName = localStorage.getItem('eburon_voiceName') || 'Aoede';
+    const savedLanguage = localStorage.getItem('eburon_language') || 'English';
     if (savedUserContext) setUserContext(savedUserContext);
     if (savedResponseStyle) setResponseStyle(savedResponseStyle);
     setTheme(savedTheme);
     if (savedOllamaModel) setOllamaModel(savedOllamaModel);
+    setVoiceName(savedVoiceName);
+    setLanguage(savedLanguage);
   }, []);
 
   const saveSettings = () => {
@@ -193,6 +252,8 @@ export default function App() {
     localStorage.setItem('eburon_responseStyle', responseStyle);
     localStorage.setItem('eburon_theme', theme);
     localStorage.setItem('eburon_ollamaModel', ollamaModel);
+    localStorage.setItem('eburon_voiceName', voiceName);
+    localStorage.setItem('eburon_language', language);
     setActiveModal(null);
   };
 
@@ -511,7 +572,9 @@ export default function App() {
           setIsLiveActive(false);
         },
         sessionUserContext,
-        responseStyle
+        responseStyle,
+        voiceName,
+        language
       );
 
       liveSessionRef.current = await sessionPromise;
@@ -716,7 +779,9 @@ export default function App() {
           stopLiveSession();
         },
         userContext,
-        responseStyle
+        responseStyle,
+        voiceName,
+        language
       );
 
       liveSessionRef.current = await sessionPromise;
@@ -1447,7 +1512,7 @@ export default function App() {
               <motion.main
                 key="auth"
                 initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+                animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="absolute inset-0 flex flex-col items-center justify-center px-6 z-10 bg-black"
               >
@@ -1984,7 +2049,7 @@ export default function App() {
                 className="absolute top-0 left-0 w-[75%] h-full bg-[#111] z-50 flex flex-col"
               >
                 <div className="p-6 border-b border-neutral-800 flex justify-between items-center">
-                  <div className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-2">
                     <div className="relative w-8 h-8">
                       <Image 
                         src="https://eburon.ai/icon-eburon.svg" 
@@ -2178,31 +2243,37 @@ export default function App() {
                         placeholder="e.g., I'm a software developer..."
                       />
                       <p className="text-sm text-white mt-4 mb-2">How would you like Beatrice to respond?</p>
-                      <textarea 
+                      <textarea
                         value={responseStyle}
                         onChange={(e) => setResponseStyle(e.target.value)}
                         className="w-full bg-[#212121] border border-neutral-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-neutral-600 min-h-[120px]"
                         placeholder="e.g., Keep responses concise and use code examples..."
                       />
-                      <p className="text-sm text-white mt-4 mb-2">Hosted Model (Ollama)</p>
-                      <input
-                        type="text"
-                        value={ollamaModel}
-                        onChange={(e) => setOllamaModel(e.target.value)}
-                        placeholder="e.g. llama3.2, codemax-beta:latest, mistral"
+
+                      {/* Voice selection */}
+                      <p className="text-sm text-white mt-4 mb-2">Voice</p>
+                      <select
+                        value={voiceName}
+                        onChange={(e) => setVoiceName(e.target.value)}
                         className="w-full bg-[#212121] border border-neutral-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-neutral-600"
-                      />
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {['llama3.2', 'codemax-beta:latest', 'mistral', 'llama3.1', 'qwen2.5'].map((m) => (
-                          <button
-                            key={m}
-                            onClick={() => setOllamaModel(m)}
-                            className={`px-3 py-1.5 text-xs rounded-lg ${ollamaModel === m ? 'bg-white text-black font-medium' : 'bg-[#212121] text-neutral-400 hover:text-white border border-neutral-800'}`}
-                          >
-                            {m}
-                          </button>
+                      >
+                        {GEMINI_VOICES.map((v) => (
+                          <option key={v.name} value={v.name}>{v.alias}</option>
                         ))}
-                      </div>
+                      </select>
+
+                      {/* Language selection */}
+                      <p className="text-sm text-white mt-4 mb-2">Language</p>
+                      <select
+                        value={language}
+                        onChange={(e) => setLanguage(e.target.value)}
+                        className="w-full bg-[#212121] border border-neutral-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-neutral-600"
+                      >
+                        {GEMINI_LANGUAGES.map((lang) => (
+                          <option key={lang} value={lang}>{lang}</option>
+                        ))}
+                      </select>
+
                       <p className="text-sm text-white mt-4 mb-2">Theme</p>
                       <div className="flex bg-[#212121] p-1 rounded-xl border border-neutral-800">
                         {(['light', 'dark', 'system'] as const).map((t) => (

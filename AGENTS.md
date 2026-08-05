@@ -26,7 +26,7 @@ Copy `.env.example` to `.env.local` and set at minimum `GEMINI_API_KEY`. See `.e
 
 ### Overview
 
-A single-page Next.js 16 App Router application ("BeatriceVoice" / "Eburon AI") — a conversational AI assistant with voice, image, and thinking capabilities. Deployed via Google AI Studio.
+A single-page Next.js 16 App Router application ("BeatriceVoice" / "Beatrice OS") — a conversational AI assistant with voice, image, and thinking capabilities. Deployed via Google AI Studio.
 
 ### Source Layout
 
