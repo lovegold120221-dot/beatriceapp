@@ -152,14 +152,11 @@ class ActionHandler {
             result = 'AI service not available for task execution.';
             break;
           }
-          _currentExecutor = TaskExecutor(
+          final executor = createTaskExecutor(
             aiService: aiService,
-            screenService: _screenAutomation,
-            appLauncher: _appLauncher,
-            shizukuService: _shizuku,
             onProgress: onProgress,
           );
-          result = await _currentExecutor!.executeTask(goal);
+          result = await executor.executeTask(goal);
           _currentExecutor = null;
           break;
 
@@ -181,8 +178,27 @@ class ActionHandler {
     }
   }
 
+  /// Create a TaskExecutor for a multi-step task and register it as the
+  /// currently running executor (so [cancelCurrentTask] can stop it).
+  TaskExecutor createTaskExecutor({
+    required AiService aiService,
+    void Function(String)? onProgress,
+  }) {
+    _currentExecutor = TaskExecutor(
+      aiService: aiService,
+      screenService: _screenAutomation,
+      appLauncher: _appLauncher,
+      shizukuService: _shizuku,
+      onProgress: onProgress,
+    );
+    return _currentExecutor!;
+  }
+
   /// Cancel the currently running task
   void cancelTask() {
     _currentExecutor?.cancel();
   }
+
+  /// Alias used by the task queue service.
+  void cancelCurrentTask() => cancelTask();
 }

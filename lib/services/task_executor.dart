@@ -31,6 +31,9 @@ class TaskExecutor {
   bool _cancelled = false;
   Completer<void>? _cancelCompleter;
 
+  /// Whether the last executeTask run was cancelled by the user.
+  bool get wasCancelled => _cancelled;
+
   TaskExecutor({
     required AiService aiService,
     required ScreenAutomationService screenService,

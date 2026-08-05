@@ -11,6 +11,8 @@ import '../widgets/message_bubble.dart';
 import '../services/telegram_service.dart';
 import '../services/chat_history_service.dart';
 import '../services/notification_service.dart';
+import '../services/firebase_service.dart';
+import '../services/task_queue_service.dart';
 import 'settings_screen.dart';
 import 'task_history_screen.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
@@ -32,6 +34,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final VoiceService _voiceService = VoiceService();
   final NotificationService _notificationService = NotificationService();
   late final TelegramService _telegramService;
+  final FirebaseService _firebaseService = FirebaseService();
+  TaskQueueService? _taskQueueService;
+  Timer? _pairingPollTimer;
+  String? _pairingCode;
 
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
@@ -66,10 +72,63 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await _voiceService.init();
     await _telegramService.init();
     await _actionHandler.shizuku.checkAvailability();
+    await _initTaskBridge();
 
     if (mounted) {
       setState(() {});
     }
+  }
+
+  /// Initialize the Firebase task bridge (device pairing + task queue).
+  Future<void> _initTaskBridge() async {
+    try {
+      await _firebaseService.init();
+      _pairingCode = await _firebaseService.ensurePaired();
+
+      _taskQueueService = TaskQueueService(
+        firebase: _firebaseService,
+        actionHandler: _actionHandler,
+        aiService: _aiService,
+        notificationService: _notificationService,
+      );
+      _taskQueueService!.onStatusUpdate = _showBridgeStatus;
+
+      if (await _firebaseService.isLinked()) {
+        _taskQueueService!.start();
+        _showBridgeStatus('Connected to Beatrice Voice task queue');
+      } else {
+        _showBridgeStatus(
+          'Pair this phone: open beatrice.eburon.ai and enter code $_pairingCode',
+        );
+        _startPairingPoll();
+      }
+    } catch (e) {
+      developer.log('Task bridge init failed: $e', name: 'BeatriceOS');
+    }
+  }
+
+  /// Poll for owner linkage until the web user enters the pairing code.
+  void _startPairingPoll() {
+    _pairingPollTimer?.cancel();
+    _pairingPollTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+      await _firebaseService.refreshOwnerLink();
+      if (await _firebaseService.isLinked()) {
+        timer.cancel();
+        _taskQueueService?.start();
+        _showBridgeStatus('Device linked — Beatrice Voice task queue active');
+      }
+    });
+  }
+
+  /// Surface bridge status to the user via a snackbar.
+  void _showBridgeStatus(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 3),
+      ));
   }
 
   Future<void> _saveSession() async {
@@ -353,6 +412,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _overlayHistoryTimer?.cancel();
+    _pairingPollTimer?.cancel();
+    _taskQueueService?.stop();
     _textController.dispose();
     _scrollController.dispose();
     _voiceService.dispose();
