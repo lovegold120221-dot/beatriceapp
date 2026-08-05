@@ -1,7 +1,7 @@
 import { GoogleGenAI, ThinkingLevel, Type, Modality, createPartFromFunctionResponse } from "@google/genai";
 import { executeTool, tools } from "./tools";
 
-const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+const apiKey = process.env.NEXT_PUBLIC_EBURON_API_KEY || process.env.EBURON_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export const models = {

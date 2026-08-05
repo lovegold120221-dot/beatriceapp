@@ -69,7 +69,7 @@ interface Message {
 
 type ViewState = 'splash' | 'auth' | 'home' | 'chat';
 
-const GEMINI_VOICES = [
+const EBURON_VOICES = [
   { name: 'Aoede', alias: 'Wonder Woman' },
   { name: 'Puck', alias: 'Spider-Man' },
   { name: 'Zephyr', alias: 'Storm' },
@@ -81,7 +81,7 @@ const GEMINI_VOICES = [
   { name: 'Sulafat', alias: 'Iron Man' },
 ];
 
-const GEMINI_LANGUAGES = [
+const EBURON_LANGUAGES = [
   'Flemish', 'Abkhaz', 'Acehnese', 'Acholi', 'Afar', 'Afrikaans', 'Albanian', 'Alur',
   'Amharic', 'Arabic', 'Armenian', 'Assamese', 'Avar', 'Awadhi', 'Aymara', 'Azerbaijani',
   'Balinese', 'Baluchi', 'Bambara', 'Baoulé', 'Bashkir', 'Basque', 'Batak Karo',
@@ -688,7 +688,7 @@ export default function App() {
             // Skip sending silence frames after hangover
             if (!isSpeech && vadSilenceFrames > VAD_HANGOVER) return;
 
-            // Downsample 24kHz → 16kHz (ratio 3:2) for Gemini live API
+            // Downsample 24kHz → 16kHz (ratio 3:2) for Eburon live API
             const outLen = Math.floor(inputData.length * 2 / 3);
             const pcmData = new Int16Array(outLen);
             for (let j = 0; j < outLen; j++) {
@@ -1080,7 +1080,7 @@ export default function App() {
     saveMessageToDb(userMessage);
     setInput('');
 
-    // Route all text through Gemini live audio (multimodal — responds with voice + text)
+    // Route all text through Eburon live audio (multimodal — responds with voice + text)
     if (!attachment) {
       if (!liveSessionRef.current) {
         await startChatLiveSession();
@@ -2257,7 +2257,7 @@ export default function App() {
                         onChange={(e) => setVoiceName(e.target.value)}
                         className="w-full bg-[#212121] border border-neutral-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-neutral-600"
                       >
-                        {GEMINI_VOICES.map((v) => (
+                        {EBURON_VOICES.map((v) => (
                           <option key={v.name} value={v.name}>{v.alias}</option>
                         ))}
                       </select>
@@ -2269,7 +2269,7 @@ export default function App() {
                         onChange={(e) => setLanguage(e.target.value)}
                         className="w-full bg-[#212121] border border-neutral-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-neutral-600"
                       >
-                        {GEMINI_LANGUAGES.map((lang) => (
+                        {EBURON_LANGUAGES.map((lang) => (
                           <option key={lang} value={lang}>{lang}</option>
                         ))}
                       </select>
