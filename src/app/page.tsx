@@ -1482,7 +1482,7 @@ export default function App() {
                       <div className="relative w-16 h-16">
                         <Image
                           src="https://eburon.ai/icon-eburon.svg"
-                          alt="Eburon AI"
+                          alt="Beatrice OS"
                           fill
                           className="object-contain"
                           referrerPolicy="no-referrer"
@@ -1496,7 +1496,7 @@ export default function App() {
                     transition={{ delay: 0.4, duration: 0.6 }}
                     className="text-3xl font-bold tracking-tight text-white mb-2"
                   >
-                    Eburon AI
+                    Beatrice OS
                   </motion.h1>
                   <motion.p
                     initial={{ y: 10, opacity: 0 }}
@@ -1504,7 +1504,7 @@ export default function App() {
                     transition={{ delay: 0.6, duration: 0.6 }}
                     className="text-sm text-neutral-500 font-medium tracking-wider uppercase"
                   >
-                    The Future of Intelligence
+                    Eburon AI mobile use Agent
                   </motion.p>
                 </motion.div>
               </motion.main>
@@ -1522,7 +1522,7 @@ export default function App() {
                       <div className="relative w-9 h-9">
                         <Image
                           src="https://eburon.ai/icon-eburon.svg"
-                          alt="Eburon AI"
+                          alt="Beatrice OS"
                           fill
                           className="object-contain"
                           referrerPolicy="no-referrer"
@@ -1629,15 +1629,15 @@ export default function App() {
                   <div className="relative w-full h-full">
                     <Image 
                       src="https://eburon.ai/icon-eburon.svg" 
-                      alt="Eburon AI Logo" 
+                      alt="Beatrice OS Logo"
                       fill 
                       className="object-contain"
                       referrerPolicy="no-referrer"
                     />
                   </div>
                 </div>
-                <h1 className="text-[28px] font-bold tracking-tight text-white mb-2">Eburon AI</h1>
-                <p className="text-sm font-medium text-neutral-400 mb-6">The Future of Intelligence</p>
+                <h1 className="text-[28px] font-bold tracking-tight text-white mb-2">Beatrice OS</h1>
+                <p className="text-sm font-medium text-neutral-400 mb-6">Eburon AI mobile use Agent</p>
                 <div className="flex flex-col items-center space-y-1">
                   <p className="text-base text-neutral-200 font-medium"></p>
                   <p className="text-xs text-neutral-500 italic"></p>
@@ -2059,7 +2059,7 @@ export default function App() {
                         referrerPolicy="no-referrer"
                       />
                     </div>
-                    <span className="font-semibold text-lg">Eburon AI</span>
+                    <span className="font-semibold text-lg">Beatrice OS</span>
                   </div>
                   <button onClick={() => setIsSidebarOpen(false)} className="text-neutral-400 hover:text-white">
                     <X size={24} />
